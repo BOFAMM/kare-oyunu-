@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#214f58"><title>Ada Muhafızları • Küçük ada, büyük kararlar</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div id="world"><canvas id="board" tabindex="0" aria-label="İzometrik ada. Ok tuşlarıyla kare seç, Enter ile yerleştir. WASD ile kamerayı kaydır."></canvas><div class="vignette"></div></div>
+<header><a class="brand" href="/" aria-label="Ada Muhafızları ana sayfa"><span class="crest">⚑</span><span>Ada <b>Muhafızları</b></span></a><div id="hud" class="hud hidden"></div><div class="header-actions"><button id="help" class="icon" aria-label="Oyun kuralları">?</button><button id="sound" class="icon" aria-label="Sesi aç veya kapat">♫</button><button id="exit" class="subtle hidden">Çıkış</button></div></header>
+<main>
+<section id="welcome" class="welcome paper">
+ <span class="little-flag">Bir ada. Altı komutan. Bolca şans.</span>
+ <h1>Küçük ada,<br>büyük kararlar.</h1>
+ <p>Ordunu büyüt, şansını dene, generalini koru. Bu adada her kare yeni bir hikâye.</p>
+ <label for="name">Komutanının adı</label><input id="name" maxlength="20" value="Gezgin" autocomplete="nickname">
+ <button id="solo" class="primary large">Tek başına oyna <span>2 botla keşfet</span></button>
+ <div class="split"><button id="create">Arkadaşlarına oda kur</button><button id="join-open">Kodla katıl</button></div>
+ <div id="join-form" class="hidden"><label for="code">6 haneli oda kodu</label><div class="split"><input id="code" inputmode="numeric" maxlength="6" placeholder="123456"><button id="join" class="primary">Katıl</button></div></div>
+ <div class="welcome-foot"><span>2–6 oyuncu</span><span>45 sn / hamle</span><span>İlk 5 tur barış</span></div>
+ <small>Yalnızca oyun içi dolar. Gerçek para içermez.</small>
+</section>
+<section id="lobby" class="paper lobby hidden"><div class="panel-top"><h2>Komutanlar toplanıyor</h2><span class="tag">Lobi</span></div><p>Arkadaşların aynı sunucuda bu kodla katılabilir.</p><button id="copy-code" class="room-code" title="Oda kodunu kopyala"></button><div id="lobby-players"></div><div id="host-settings"><label class="check"><input id="manual" type="checkbox"> Başlangıç yerini herkes seçsin</label><p class="muted">Kapalıysa 2×5 ordular rastgele başlangıç noktalarına yerleşir.</p><div class="split"><button id="bot">+ Bot ekle</button><button id="start" class="primary">Macerayı başlat</button></div></div><p id="wait-host" class="hidden">Kurucunun oyunu başlatması bekleniyor.</p><p class="muted">Bu bilgisayarda farklı sekme veya tarayıcı açarak da katılabilirsin.</p></section>
+<aside id="roster" class="roster hidden"><div class="side-heading">Adanın komutanları <span id="room-label"></span></div><div id="players"></div><details class="journal"><summary>Ada günlüğü</summary><ol id="logs"></ol></details></aside>
+<aside id="actions" class="paper actions hidden"><div class="panel-top"><div><span class="muted">Komuta masası</span><h2 id="your-name">Gezgin</h2></div><span class="emblem">⚑</span></div><div id="turn-label" class="turn-label"></div>
+ <div class="resource-row"><div><span>Kasadaki dolar</span><strong id="money">0$</strong></div><div><span>Yerleşecek asker</span><strong id="pending">0</strong></div></div>
+ <section id="bet-section"><div class="section-label">Ne kadarını riske ediyorsun?</div><div class="bet-inputs"><label>Asker <input id="bet-troops" type="number" min="0" value="3" step="1"></label><label>Dolar <input id="bet-money" type="number" min="0" value="0" step="1"></label></div><button id="roll" class="primary large">Şans çarkını çevir <span>Zar at</span></button></section>
+ <div id="last-result" class="last-result hidden"></div>
+ <section id="loss-tools" class="loss-tools hidden" aria-live="polite"><h3>Çekilecek birlikleri seç</h3><p id="loss-count"></p><p>Haritada kendi askerlerine tıkla. Generalin karesini seçersen rütbesi ve canı en yakın normal askere geçer. Bağlantıyı koparan kareler silinmez.</p><button id="auto-loss">Kalan kaybı otomatik tamamla</button><small>Süre dolunca kalan seçimleri sunucu tamamlar.</small></section>
+ <div id="placement-tools"><div class="section-label">Kazancını değerlendir</div><div class="percentages"><button data-convert="25">%25</button><button data-convert="50">%50</button><button data-convert="75">%75</button><button data-convert="100">%100</button></div><p class="muted">Seçtiğin oran dolara çevrilir. Kalanı haritaya yerleştir.</p><div class="split"><button id="heal">♥ General iyileştir</button><button id="auto-place">Hızlı yerleştir</button></div></div>
+ <div class="split mini-row"><button id="shop">▣ Mağaza</button><button id="powers">✦ Güçlerim</button></div><button id="end" class="end-turn">Hamleyi bitir <span>→</span></button>
+</aside>
+<div id="map-controls" class="map-controls hidden"><button id="zoom-out" aria-label="Uzaklaştır">−</button><button id="focus">⚑ Orduma git</button><button id="zoom-in" aria-label="Yakınlaştır">+</button><button id="fit" aria-label="Adanın tamamını göster">▧</button></div>
+<div id="map-hint" class="map-hint">50 × 50 keşfedilecek kare · Tekerlekle yakınlaştır</div><div id="target-hint" class="target-hint hidden"><span></span><button id="cancel-target">Vazgeç</button></div>
+</main>
+<div id="toast" role="status" aria-live="polite"></div>
+<dialog id="modal"><div class="modal-head"><h2 id="modal-title"></h2><button id="close-modal" class="icon" aria-label="Pencereyi kapat">×</button></div><div id="modal-body"></div></dialog>
+<div id="draft" class="overlay hidden"><div class="draft-wrap"><span class="little-flag">Yol arkadaşlarını seç</span><h1>Biraz strateji, biraz sihir.</h1><p>Bu üç güçten ikisi senin. Adadaki hikâyen burada başlıyor.</p><div id="draft-cards" class="draft-cards"></div><button id="confirm-powers" class="primary large" disabled>İki güç seç</button><p id="draft-wait"></p></div></div>
+<div id="countdown" class="countdown hidden"><div><p>Ordular adaya geliyor</p><strong>3</strong><span>Generalini koru. Kenarlardan büyü.</span></div></div>
+<div id="reel-overlay" class="overlay hidden"><div class="reel-shell"><div class="little-flag">Şansın yolu nereden geçecek?</div><h2 id="reel-title">Kader dönüyor…</h2><div class="reel-window"><div class="needle"></div><div id="reel-track"></div></div><div id="reel-result">Sonuç bekleniyor</div><button id="reel-close" class="primary hidden">Adaya dön</button><div class="odds" id="odds"></div></div></div>
+<script type="module" src="app.js"></script></body></html>
