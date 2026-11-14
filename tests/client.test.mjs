@@ -46,3 +46,5 @@ test('manual loss invalid cell leaves loss controls available instead of freezin
  assert.match(c.nodes.get('toast').textContent,/Kendi asker/);assert.equal(c.nodes.get('auto-loss').disabled,false);assert.equal(c.api.busy,false);
  await c.nodes.get('auto-loss').onclick();assert.equal(c.nodes.get('loss-tools').classList.contains('hidden'),true);
 });
+
+test('bet sliders, presets, formula and saved bet respect current resources',async()=>{const c=client(),s=state();c.set(s);c.nodes.get('preset-4').onclick();assert.equal(c.nodes.get('bet-troops').value,2);assert.equal(c.nodes.get('bet-money').value,10);assert.match(c.nodes.get('bet-formula').textContent,/24 asker/);c.nodes.get('bet-section').onkeydown({target:{id:'troop-slider'},key:'ArrowLeft',shiftKey:false,preventDefault(){}});assert.equal(c.nodes.get('bet-troops').value,1);s.lock='b';c.set(s);c.nodes.get('preset-4').onclick();assert.equal(c.nodes.get('bet-money').value,0);assert.match(c.nodes.get('bet-badges').textContent,/Kasa kilitli/);});
