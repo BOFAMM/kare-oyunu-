@@ -49,3 +49,5 @@ export function reelPlan(value,rng=Math.random){
 export const reelEase=p=>1-(1-Math.max(0,Math.min(1,p)))**4;
 // Crossings use the same inverse easing as the visual reel, so clicks slow down with the cards.
 export function reelClickTimes(distance,pointerX,duration){const times=[];for(let edge=(Math.floor(pointerX/108)+1)*108;edge<=pointerX+distance;edge+=108){const fraction=(edge-pointerX)/distance;times.push(duration*(1-(1-fraction)**.25));}return times;}
+
+export function betPreview(s,id,troops,money){const p=s.players.find(p=>p.id===id);if(!p||![troops,money].every(n=>Number.isSafeInteger(n)&&n>=0)||troops>units(s,id).length||money>p.money)return null;return ODDS.map(({v})=>({value:v,gain:v>0?(troops+money)*v*(p.double?2:1):0,loss:v<0&&!p.lucky?Math.min(troops*-v,units(s,id).filter(([,u])=>!u.hp).length):0,money:v<0&&!p.lucky?Math.min(money*-v,p.money):0}));}

@@ -13,3 +13,5 @@ test('reel slows monotonically and tick intervals grow along the same trajectory
  assert.equal(reelEase(0),0);assert.equal(reelEase(1),1);const times=reelClickTimes(8400,320,REEL_DURATION_MS);assert.ok(times.length>70);const gaps=times.slice(1).map((t,i)=>t-times[i]);for(let i=1;i<gaps.length;i++)assert.ok(gaps[i]>=gaps[i-1]-1e-8);assert.ok(gaps.at(-1)>gaps[0]*10);assert.equal(REEL_DURATION_MS,5000);assert.equal(ROLL_REVEAL_MS,REEL_DURATION_MS);
  assert.equal(multiplierLabel(10),'+10');assert.equal(multiplierLabel(-2),'−2');
 });
+
+test('bet preview matches multipliers, resource caps and power modifiers',async()=>{const {betPreview}=await import('../public/rules.js');const s={players:[{id:'a',money:3,double:true}],board:{'0,0':{owner:'a',hp:10},'1,0':{owner:'a',hp:0}}};let rows=betPreview(s,'a',2,3);assert.equal(rows.find(r=>r.value===2).gain,20);assert.deepEqual(rows.find(r=>r.value===-2),{value:-2,gain:0,loss:1,money:3});s.players[0].lucky=true;assert.equal(betPreview(s,'a',2,3).find(r=>r.value===-2).loss,0);assert.equal(betPreview(s,'a',99,3),null);});

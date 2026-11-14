@@ -1,0 +1,22 @@
+GÜNCELLEME — 14 Kasım 2026
+
+Bu paket önceki düzeltmeleri de içerir: +1 %45 / -1 %35, rastgele manuel yerleşim sırası, boş kareye general satın alma ve zar sonrası fazladan beklemenin kaldırılması.
+
+Eklenenler:
+- Asker inişi, yerleşme halkası, 90 ms aralıklı yerleşme sesi.
+- General rütbesinin kaynak kareden hedefe geçmesi ve hedefin parlaması.
+- Eksi kayıplarda geri çekilme; saldırıda darbe/hasar ve general düşüş göstergesi.
+- Sıra başında takım bölgesi vurgusu ve oyuncunun kendi sırasında arma bildirimi.
+- Sonuca göre farklı zar vuruşu; büyük sonuçlarda daha güçlü vurgu.
+- Tüm sonuçlar için bahis önizlemesi; çifte kazanç, şans koruması ve kaynak sınırları hesaba katılır.
+- Silme önizlemesinde generalin geçeceği kare ve geçersiz silme açıklaması.
+- İlk oyun için kapatılabilir, mevcut hamleye göre değişen uygulamalı rehber. Ayrı bir eğitim maçı değildir; normal oyun sırasında yol gösterir.
+- Maç sonunda oyuncu bazında en büyük kazanç, ele geçirilen kare, verilen hasar ve general aktarımı sayısı.
+- Kurucunun başlattığı aynı odada rövanş: oda kodu, oyuncular, botlar, oturumlar ve ayarlar korunur; maç kaynakları sıfırlanır. Lobiye dönülür, kurucu tekrar başlatır.
+
+KURULUM
+ZIP'i çıkarın. İçindeki engine.mjs, server.mjs, package.json, public ve tests öğelerini GitHub deponuzun köküne yükleyip aynı yolları güncelleyin. public klasör yapısını koruyun. ZIP dosyasını doğrudan yüklemeyin. .data klasörünü yüklemeyin.
+Commit changes sonrası Render > Manual Deploy > Deploy latest commit. Dağıtım tamamlanınca Ctrl+F5. Yeni özellikleri yeni maçta kontrol edin. Yerel kullanım için çalışan Node sunucusunu kapatıp yeniden başlatın.
+
+KONTROLLER VE SINIRLAR
+52 Node otomatik testi geçti. Gerçek tarayıcıda görüntü, ses dinleme ve mobil dokunma kontrolü yapılmadı. Canvas çizimi sahte çizim bağlamıyla sınandı; bu görsel kalite onayı değildir. Eski maçların geçmiş istatistikleri geriye dönük üretilemez. General aktarımı sayısı kritik kurtarış değerlendirmesi değil, gerçek aktarım sayısıdır. Rövanş sonunda lobiye dönüş tüm oyuncuları etkiler ve yalnızca kurucu tarafından başlatılır. .data pakete dahil değildir. Render'da kalıcı disk yoksa dağıtım oda kayıtlarını kaybettirebilir.

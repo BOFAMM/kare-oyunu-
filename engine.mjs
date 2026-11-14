@@ -20,7 +20,7 @@ function components(s,id,exclude){const remaining=new Set(units(s,id).map(([k])=
 function canRemove(s,id,k){return components(s,id,k)<=components(s,id);}
 function dismiss(s,p,k){
  need(p.lossRemaining>0,'Silinecek asker borcun yok.');const plan=dismissalPlan(s,p.id,k);need(plan.ok,plan.reason);
- if(plan.transfer){s.board[plan.transfer].hp=s.board[k].hp;const [x,y]=xy(plan.transfer);event(s,'promote',{x,y,player:p.id});}
+ if(plan.transfer){(p.stats??={bestGain:0,captures:0,damage:0,rescues:0}).rescues++;s.board[plan.transfer].hp=s.board[k].hp;const [x,y]=xy(plan.transfer);event(s,'promote',{x,y,fromX:xy(k)[0],fromY:xy(k)[1],player:p.id});}
  delete s.board[k];p.lossRemaining--;const [x,y]=xy(k);event(s,'dismiss',{x,y,player:p.id});
  if(!p.lossRemaining)log(s,p.name+' asker kaybını tamamladı; general rütbeleri korundu.');
 }
@@ -51,7 +51,8 @@ function use(s,p,a,rng){const pow=POWERS.find(x=>x.id===a.power);need(pow,'Bilin
 }
 // Commands commit a clone: a rejected action cannot partially spend resources or damage the board.
 export function act(state,id,a,{now=Date.now(),rng=Math.random}={}){const s=structuredClone(state);const p=player(s,id);need(a&&typeof a.type==='string','Geçersiz hamle.');
- if(a.type==='settings'){need(s.host===id&&s.stage==='lobby','Ayarları lobide yalnızca kurucu değiştirir.');s.settings.manual=a.manual===true;}
+ if(a.type==='rematch'){need(s.stage==='ended'&&s.host===id,'Rövanşı maç sonunda oda kurucusu başlatır.');const fresh=createRoom(s.code,s.host,p.name,now);fresh.settings={...s.settings};fresh.seq=s.seq;fresh.updated=now;for(const q of s.players)addPlayer(fresh,q.id,q.name,q.bot);return fresh;}
+ else if(a.type==='settings'){need(s.host===id&&s.stage==='lobby','Ayarları lobide yalnızca kurucu değiştirir.');s.settings.manual=a.manual===true;}
  else if(a.type==='start'){need(s.host===id&&s.stage==='lobby','Oyunu lobide kurucu başlatır.');need(s.players.length>=2,'En az iki oyuncu veya bir bot gerekir.');s.stage='draft';s.deadline=now+90000;for(const q of s.players){q.offers=shuffled(POWERS.map(x=>x.id),rng).slice(0,3);if(q.bot){q.offers.slice(0,2).forEach(x=>grant(s,q,x));q.chosen=true;}}log(s,'Her komutan 3 karttan 2 güç seçiyor.');}
  else if(a.type==='choose'){need(s.stage==='draft'&&!p.chosen,'Kart seçimi açık değil.');need(Array.isArray(a.powers)&&a.powers.length===2&&new Set(a.powers).size===2&&a.powers.every(x=>p.offers.includes(x)),'Sunulan üç karttan iki farklı güç seç.');a.powers.forEach(x=>grant(s,p,x));p.chosen=true;if(s.players.every(q=>q.chosen))prepare(s,now,rng);}
  else if(a.type==='setup'){need(s.stage==='placement'&&current(s).id===id,'Yerleşim sırası sende değil.');need(inside(a.x,a.y)&&inside(a.x+1,a.y+4),'2×5 dizilim ada içinde olmalı.');for(let y=0;y<5;y++)for(let x=0;x<2;x++)need(!s.board[key(a.x+x,a.y+y)],'Dizilim başka bir oyuncuyla çakışıyor.');form(s,p,a.x,a.y);s.cursor++;s.deadline=now+90000;if(s.cursor===s.order.length){s.cursor=0;countdown(s,now);}}
@@ -69,7 +70,12 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random}={}){const s=stru
  case 'power':use(s,p,a,rng);break;
  case 'end':endTurn(s,now);break;
  default:throw Error('Bilinmeyen hamle.');
- }}s.updated=now;return s;
+ }}if(state.stage==='playing'&&a.type!=='rematch'){
+ const stats=p.stats??={bestGain:0,captures:0,damage:0,rescues:0};
+ if(a.type==='roll')stats.bestGain=Math.max(stats.bestGain,s.roll.gain);
+
+ for(const [k,u]of Object.entries(state.board)){const v=s.board[k];if(u.owner!==id){if(v?.owner===id&&a.type==='place')stats.captures++;if(a.type==='place'||a.type==='power'&&a.power===5){const damage=u.hp?Math.max(0,u.hp-(v?.owner===u.owner?v.hp:0)):(!v||v.owner!==u.owner?1:0);if(damage&&!(s.players.find(q=>q.id===u.owner)?.eliminated&&!u.hp))stats.damage+=damage;}}}
+ }s.updated=now;return s;
 }
 export function tick(state,now=Date.now(),rng=Math.random){if(now<state.deadline||['lobby','ended'].includes(state.stage))return state;let s=structuredClone(state);if(s.stage==='draft'){for(const p of s.players)if(!p.chosen){p.offers.slice(0,2).forEach(x=>grant(s,p,x));p.chosen=true;}prepare(s,now,rng);}else if(s.stage==='placement'){const p=current(s);outer:for(let y=15;y<45;y++)for(let x=15;x<45;x++){let ok=true;for(let dy=0;dy<5;dy++)for(let dx=0;dx<2;dx++)if(s.board[key(x+dx,y+dy)])ok=false;if(ok){s=act(s,p.id,{type:'setup',x,y},{now,rng});break outer;}}}else if(s.stage==='countdown'){s.stage='playing';beginTurn(s,now);}else endTurn(s,now);s.updated=now;return s;}
 export function botStep(s,now=Date.now(),rng=Math.random){const p=current(s);if(!p?.bot)return s;if(s.stage==='placement')return tick({...s,deadline:now},now,rng);if(s.stage!=='playing'||now<(s.revealUntil||0))return s;let a;
