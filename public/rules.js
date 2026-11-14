@@ -1,8 +1,8 @@
 export const SIZE=50;
 export const REEL_DURATION_MS=5000;
-export const ROLL_REVEAL_MS=8500;
+export const ROLL_REVEAL_MS=REEL_DURATION_MS;
 export const multiplierLabel=value=>(value<0?'−':'+')+Math.abs(value);
-export const ODDS=[{v:1,w:4000},{v:-1,w:4000},{v:2,w:750},{v:-2,w:750},{v:5,w:200},{v:-5,w:200},{v:10,w:100}];
+export const ODDS=[{v:1,w:4500},{v:-1,w:3500},{v:2,w:750},{v:-2,w:750},{v:5,w:200},{v:-5,w:200},{v:10,w:100}];
 export const COLORS=['#4d9fe8','#e87864','#b38be2','#efbd52','#63bd90','#ed91b1'];
 export const POWERS=[
  {id:1,name:'Dolu kese',icon:'◈',price:30,uses:1,desc:'Kasana 30$ ekle. Başlangıçta seçilirse hemen uygulanır.'},
