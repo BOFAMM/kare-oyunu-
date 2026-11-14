@@ -1,0 +1,7 @@
+ASSET SOURCES
+lava.png — Y2K Lava Texture — GGBotNet — CC0.
+Source: https://opengameart.org/content/y2k-lava-texture
+Download: https://opengameart.org/sites/default/files/y2k_lava_texture.png
+Retrieved: 2026-11-14. Original PNG; rendered with opacity/motion in game.
+Other cosmetics are code-generated placeholders, not downloaded HD character models.
+This is a development preview, not the completed requested artwork pack.
