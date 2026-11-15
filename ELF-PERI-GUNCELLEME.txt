@@ -1,0 +1,23 @@
+16 Kasım 2026 — Elf/Peri ve generalsiz oyun güncellemesi
+
+YAPILANLAR
+- Alt harita tema oylaması kaldırıldı. Yeni maçlar ortak varsayılan haritada başlar.
+- Kullanıcının masaüstündeki iki CraftPix paketinden 3 elf ve 3 peri eklendi. Gerçek portrelerle seçilir.
+- 10 kareli bekleme, yürüme, saldırı, hasar ve ölüm atlasları. Toprak yerleştirme/saldırı generalin saldırı animasyonunu; aktarım/ışınlanma yürüme animasyonunu tetikler. Generalin konumunu serbestçe yürüterek değiştiren yeni bir oyun kuralı eklenmedi.
+- General öldüğünde diğer askerler kalır. Generalsiz oyuncu yeni asker yerleştirir ve saldırır; yeni general satın alamaz. Son karesi kaybolunca elenir.
+- Yeniden düzenleme diğer güçleri engellemez. Yeniden düzenleme hakları saldırıda harcanamaz; normal kazanılmış/satın alınmış haklar saldırıda kullanılabilir. Boş kare yerleşiminde önce yeniden düzenleme hakları kullanılır.
+- Generalsiz yeniden düzenlemede en az bir kare dayanak kalır. Işınlanma/ordu takasında bekleyen yeniden düzenleme askerleri önce geri konur, böylece kaybolmaz veya çoğalmaz.
+- Bağlantı bütünlüğü korunur; general köprü karesindeyse o karenin kaldırılmasına da bağlantı kuralı uygulanır.
+
+KAYNAKLAR
+C:/Users/onlin/Desktop/craftpix-392011-2d-fantasy-elf-free-sprite-sheets
+C:/Users/onlin/Desktop/craftpix-733001-2d-fantasy-fairy-free-character-sprite
+Kaynak paketler değiştirilmedi. Yalnızca gereken PNG karelerinden 400x220 hücreli, 5x2 dizilimli atlaslar ve portreler türetildi. AI/EPS/SCML/font dosyaları dağıtıma dahil edilmedi. Bu görseller kullanıcı tarafından sağlanan CraftPix varlıklarıdır; CC0 olarak yeniden etiketlenmedi.
+
+KURULUM
+ZIP'i çıkar. engine.mjs, server.mjs, package.json, public ve tests klasörlerini GitHub deposunun ana dizinine güncelle. public/assets/characters klasörü ve public/sprites.js mutlaka yüklenmeli. .data yükleme. Render'da Deploy latest commit yap, sonra Ctrl+F5 ile yenile ve yeni maç aç. Yerelde sunucuyu yeniden başlat.
+Bu sürüm eski maçlarda daha önce silinmiş orduları geri getirmez. Eski general görünüm kimlikleri yeni maçta geçerli sprite seçimine dönüşür; eski kayıtlar çizimde ilk elf görünümüne düşebilir.
+
+DOĞRULAMA
+60 otomatik test başarılı. 119 generalsiz asker kaybı/eliminasyon, generalsiz büyüme ve saldırı, general satın alma reddi, reform sırasında güç kullanımı ve ışınlanma, altı karakterin atlas boyutları test edildi. Gerçek HTTP sunucusunda 36 PNG + sprite JS modülü ve Peri 2 seçimi/maç başlangıcı geçti.
+Tarayıcı otomasyonu 'registered runtime ownership is missing' hatasıyla başlatılamadı. Oyun ekranında animasyon akışı ve mobil performans gözle doğrulanmadı. Paketler yandan görünümlü 2D sprite; gerçek izometrik çok yönlü 3D model değildir. Yeni animasyonlar seçim ve general gösterimine uygulanır; sıradan askerler ortak küçük görünümünü korur.

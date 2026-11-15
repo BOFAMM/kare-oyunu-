@@ -19,7 +19,7 @@ export const POWERS=[
  {id:12,name:'Şans kalkanı',icon:'◇',price:15,uses:1,desc:'Bu hamledeki eksi zarın bütün kaybını önle. Zardan önce etkinleştir.'},
  {id:13,name:'Yarım pay',icon:'½',price:40,uses:1,target:'player',hostile:true,desc:'Rakibin birim sayısının yarısını al. Generaller sayılır ama korunur; gerçek alınan asker kadar kazanırsın.'},
  {id:14,name:'Dokunulmazlık',icon:'⬡',price:25,uses:3,desc:'Sıra sana dönene kadar saldırı ve rakip güçlerinden korun. 3 kullanım.'},
- {id:15,name:'Yeniden dizilim',icon:'▦',price:20,uses:-1,desc:'Generaller yerinde kalır; normal askerleri bitişik olarak yeniden diz. Bu ve sonraki hamlende saldıramazsın.'}
+ {id:15,name:'Yeniden dizilim',icon:'▦',price:20,uses:-1,desc:'Generaller yerinde kalır; normal askerleri bitişik olarak yeniden diz. Yeniden dizilim hakları saldırıda kullanılamaz; diğer güçler kullanılabilir.'}
 ];
 export const key=(x,y)=>x+','+y;
 export const xy=k=>k.split(',').map(Number);
@@ -27,7 +27,7 @@ export const inside=(x,y)=>Number.isInteger(x)&&Number.isInteger(y)&&x>=0&&y>=0&
 export const neighbors=(x,y)=>[[x-1,y],[x+1,y],[x,y-1],[x,y+1]].filter(([a,b])=>inside(a,b));
 export function units(s,id){return Object.entries(s.board).filter(([,u])=>u.owner===id);}
 export function connected(s,id){const todo=units(s,id).filter(([,u])=>u.hp>0).map(([k])=>k), found=new Set(todo);for(let i=0;i<todo.length;i++)for(const [x,y]of neighbors(...xy(todo[i]))){const k=key(x,y);if(s.board[k]?.owner===id&&!found.has(k)){found.add(k);todo.push(k);}}return found;}
-export function adjacent(s,id,x,y){const c=connected(s,id);return neighbors(x,y).some(([a,b])=>c.has(key(a,b)));}
+export function adjacent(s,id,x,y){const own=units(s,id);const c=own.some(([,u])=>u.hp)?connected(s,id):new Set(own.map(([k])=>k));return neighbors(x,y).some(([a,b])=>c.has(key(a,b)));}
 export function face(r){if(!(r>=0&&r<1))throw Error('Rastgele değer 0 ile 1 arasında olmalı.');let n=r*10000;for(const o of ODDS){if(n<o.w)return o.v;n-=o.w;}return 10;}
 export function project(x,y){return {x:(x-y)*24,y:(x+y)*16};}
 export function unproject(x,y){return {x:Math.round((x/24+y/16)/2),y:Math.round((y/16-x/24)/2)};}
