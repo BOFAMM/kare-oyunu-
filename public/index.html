@@ -2,7 +2,7 @@
 <html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#214f58"><title>Ada Muhafızları • Küçük ada, büyük kararlar</title><link rel="stylesheet" href="style.css"></head>
 <body>
 <div id="world"><canvas id="board" tabindex="0" aria-label="İzometrik ada. Ok tuşlarıyla kare seç, Enter ile yerleştir. WASD ile kamerayı kaydır."></canvas><div class="vignette"></div></div>
-<header><a class="brand" href="/" aria-label="Ada Muhafızları ana sayfa"><span class="crest">⚑</span><span>Ada <b>Muhafızları</b></span></a><div id="hud" class="hud hidden"></div><div class="header-actions"><button id="help" class="icon" aria-label="Oyun kuralları">?</button><button id="sound" class="icon" aria-label="Sesi aç veya kapat">♫</button><button id="exit" class="subtle hidden">Çıkış</button></div></header>
+<header><a class="brand" href="/" aria-label="Ada Muhafızları ana sayfa"><span class="crest">⚑</span><span>Ada <b>Muhafızları</b></span></a><div id="hud" class="hud hidden"></div><div class="header-actions"><button id="admin-open" class="subtle hidden" type="button">Test paneli</button><button id="help" class="icon" aria-label="Oyun kuralları">?</button><button id="sound" class="icon" aria-label="Sesi aç veya kapat">♫</button><button id="exit" class="subtle hidden">Çıkış</button></div></header>
 <main>
 <section id="welcome" class="welcome paper">
  <span class="little-flag">Bir ada. Altı komutan. Bolca şans.</span>
@@ -19,7 +19,7 @@
 <aside id="roster" class="roster hidden"><div class="side-heading">Adanın komutanları <span id="room-label"></span></div><div id="players"></div><details class="journal"><summary>Ada günlüğü</summary><ol id="logs"></ol></details></aside>
 <aside id="actions" class="paper actions hidden"><div class="panel-top"><div><span class="muted">Komuta masası</span><h2 id="your-name">Gezgin</h2></div><span class="emblem">⚑</span></div><div id="turn-label" class="turn-label"></div>
  <div class="resource-row"><div><span>Kasadaki dolar</span><strong id="money">0$</strong></div><div><span>Yerleşecek asker</span><strong id="pending">0</strong></div></div>
- <section id="bet-section"><div class="section-label">Ne kadarını riske ediyorsun?</div><div class="bet-inputs"><label>Asker <input id="bet-troops" type="number" min="0" value="3" step="1"></label><label>Dolar <input id="bet-money" type="number" min="0" value="0" step="1"></label></div><div class="bet-slider-row"><label for="troop-slider">Asker bahsi</label><input id="troop-slider" type="range" min="0" value="3" step="1"></div><div class="bet-slider-row"><label for="money-slider">Dolar bahsi</label><input id="money-slider" type="range" min="0" value="0" step="1"></div><div class="bet-presets"><button id="preset-1">%25</button><button id="preset-2">%50</button><button id="preset-3">%75</button><button id="preset-4">Tümü</button><button id="last-bet">Son bahis</button></div><div id="bet-badges" role="status"></div><p id="bet-formula"></p><div class="dice-actions"><button id="roll" class="primary large">12 yüzlü zarı at <span>Bahsi onayla</span></button><button id="skip-roll">Zar atmadan geç</button></div><div id="bet-preview" aria-live="polite"></div></section>
+ <section id="bet-section"><div class="section-label">Ne kadarını riske ediyorsun?</div><div class="bet-inputs"><label>Asker <input id="bet-troops" type="number" min="0" value="3" step="1"></label><label>Dolar <input id="bet-money" type="number" min="0" value="0" step="1"></label></div><div class="bet-slider-row"><label for="troop-slider">Asker bahsi</label><input id="troop-slider" type="range" min="0" value="3" step="1"></div><div class="bet-slider-row"><label for="money-slider">Dolar bahsi</label><input id="money-slider" type="range" min="0" value="0" step="1"></div><div class="bet-presets"><button id="preset-1">%25</button><button id="preset-2">%50</button><button id="preset-3">%75</button><button id="preset-4">Tümü</button><button id="last-bet">Son bahis</button></div><div id="bet-badges" role="status"></div><p id="bet-formula"></p><div class="dice-actions"><button id="roll" class="primary large">Şans çarkını çevir <span>Bahsi onayla</span></button><button id="skip-roll">Zar atmadan geç</button></div><div id="bet-preview" aria-live="polite"></div></section>
  <div id="last-result" class="last-result hidden"></div>
  <section id="loss-tools" class="loss-tools hidden" aria-live="polite"><h3>Çekilecek birlikleri seç</h3><p id="loss-count"></p><p>Haritada kendi askerlerine tıkla. Generalin karesini seçersen rütbesi ve canı en yakın normal askere geçer. Bağlantıyı koparan kareler silinmez.</p><button id="auto-loss">Kalan kaybı otomatik tamamla</button><small>Süre dolunca kalan seçimleri sunucu tamamlar.</small></section>
  <div id="placement-tools"><div class="section-label">Kazancını değerlendir</div><div class="percentages"><button data-convert="25">%25</button><button data-convert="50">%50</button><button data-convert="75">%75</button><button data-convert="100">%100</button></div><p class="muted">Seçtiğin oran dolara çevrilir. Kalanı haritaya yerleştir.</p><div class="split"><button id="heal">♥ General iyileştir</button><button id="auto-place">Hızlı yerleştir</button></div></div>
@@ -30,9 +30,29 @@
 </main>
 <div id="toast" role="status" aria-live="polite"></div>
 <dialog id="modal"><div class="modal-head"><h2 id="modal-title"></h2><button id="close-modal" class="icon" aria-label="Pencereyi kapat">×</button></div><div id="modal-body"></div></dialog>
+<dialog id="admin-dialog" aria-labelledby="admin-title">
+ <div class="modal-head"><h2 id="admin-title">Yönetici testi</h2><button id="admin-close" class="icon" type="button" aria-label="Kapat">×</button></div>
+ <form id="admin-login"><label>Yönetici anahtarı <input id="admin-key" type="password" required autocomplete="off" autocapitalize="none" spellcheck="false"></label><button id="admin-sign-in" class="primary">Giriş yap</button></form>
+ <fieldset id="admin-controls" hidden>
+  <div class="admin-grid"><label>Oda<select id="admin-room"></select></label><label>Oyuncu<select id="admin-player"></select></label></div>
+  <p id="admin-room-info" class="muted"></p>
+  <fieldset id="admin-match">
+   <label>Bir sonraki çark sonucu<select id="admin-roll"></select></label>
+   <div class="admin-grid"><button id="admin-queue" type="button">Sonucu sıraya al</button><button id="admin-random" type="button">Rastgeleye dön</button></div>
+   <p id="admin-queued" class="muted"></p>
+   <form id="admin-setup">
+    <div class="admin-grid"><label>Tur<input id="admin-round" type="number" min="1" max="10000" required></label><label>Kasa ($)<input id="admin-money" type="number" min="0" max="1000000" required></label><label>Yeni asker hakkı<input id="admin-pending" type="number" min="0" max="1000000" required></label><label>Mevcut general canı<input id="admin-hp" type="number" min="1" max="1000000"></label></div>
+    <label>Güç ekle<select id="admin-power"></select></label>
+    <div class="admin-grid"><button>Test ayarlarını uygula</button><button id="admin-turn" type="button">Sırayı bu oyuncuya ver</button></div>
+   </form>
+  </fieldset>
+  <div class="admin-grid"><button id="admin-advance" type="button">Sırayı / aşamayı ilerlet</button><button id="admin-refresh" type="button">Odaları yenile</button><button id="admin-logout" type="button">Yönetici çıkışı</button></div>
+ </fieldset>
+ <p id="admin-status" role="status"></p>
+</dialog>
 <div id="draft" class="overlay hidden"><div class="draft-wrap"><span class="little-flag">Yol arkadaşlarını seç</span><h1>Biraz strateji, biraz sihir.</h1><p>Bu üç güçten ikisi senin. Adadaki hikâyen burada başlıyor.</p><div id="cosmetic-selection"></div><div id="draft-cards" class="draft-cards"></div><button id="confirm-powers" class="primary large" disabled>İki güç seç</button><p id="draft-wait"></p></div></div>
 <div id="countdown" class="countdown hidden"><div><p>Ordular adaya geliyor</p><strong>3</strong><span>Generalini koru. Kenarlardan büyü.</span></div></div>
-<div id="reel-overlay" class="dice-stage hidden"><canvas id="dice-canvas" aria-hidden="true"></canvas><div class="dice-caption"><span id="reel-title"></span><strong id="dice-face" class="hidden"></strong></div></div>
+<div id="reel-overlay" class="overlay hidden"><section class="reel-shell" aria-label="Şans çarkı"><h2 id="reel-title"></h2><div class="reel-window"><div id="reel-track" aria-hidden="true"></div><div class="needle" aria-hidden="true"></div></div></section></div>
 <div id="reel-result" class="dice-result hidden" role="status" aria-live="polite"></div>
 <div id="power-notice" class="power-notice hidden" role="status" aria-live="polite"><img id="power-portrait" alt="" width="50" height="50"><div id="power-symbol" aria-hidden="true"></div><div><strong id="power-title"></strong><span id="power-detail"></span></div></div>
 <div id="turn-banner" role="status"></div><script type="module" src="app.js"></script></body></html>

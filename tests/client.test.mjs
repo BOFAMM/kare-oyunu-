@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import * as rules from '../public/rules.js';
-import {THEMES,GENERALS,DICE_STYLES,generalById,teamColor} from '../public/cosmetics.js';
+import {THEMES,GENERALS,generalById,teamColor} from '../public/cosmetics.js';
 import {FX_DURATION,powerNotice} from '../public/battle-fx.js';
 import {act} from '../engine.mjs';
 const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
@@ -19,7 +19,7 @@ function client(){
  for(const m of html.matchAll(/id="([^"]+)"/g))nodes.set(m[1],element(m[1]));
  const selectors={'#target-hint span':element('hint-text'),'#countdown strong':element('count-number'),'.reel-window':element('reel-window'),'.needle':element('needle')};
  const document={getElementById:id=>nodes.get(id)||null,querySelector:q=>selectors[q]||null,querySelectorAll:()=>[],createElement:()=>element('new'),body:element('body')};
- const context={...rules,THEMES,GENERALS,DICE_STYLES,generalById,teamColor,FX_DURATION,powerNotice,startDice:()=>()=>{},document,console,Date,Math,Promise,AbortSignal,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},localStorage:{getItem:()=> 'off',setItem(){}},location:{reload(){}},navigator:{},
+ const context={...rules,THEMES,GENERALS,generalById,teamColor,FX_DURATION,powerNotice,installAdmin:()=>{},document,console,Date,Math,Promise,AbortSignal,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},localStorage:{getItem:()=> 'off',setItem(){}},location:{reload(){}},navigator:{},
   Board:class{reduced=false;setState(){}effect(){}focus(){}fit(){}zoomBy(){}},
   setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>0,clearInterval(){},
   fetch:async(url,options)=>{try{backend=act(backend,'a',JSON.parse(options.body));return {ok:true,json:async()=>({id:'a',state:backend})};}catch(e){return {ok:false,status:400,json:async()=>({error:e.message})};}}

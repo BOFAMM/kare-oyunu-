@@ -1,5 +1,5 @@
-import {GENERALS,DICE_STYLES,generalById,teamColor} from './public/cosmetics.js';
-import {SIZE,ROLL_REVEAL_MS,POWERS,COLORS,key,xy,inside,neighbors,units,adjacent,face,shuffled,dismissalPlan,multiplierLabel} from './public/rules.js';
+import {GENERALS,generalById,teamColor} from './public/cosmetics.js';
+import {ODDS,SIZE,ROLL_REVEAL_MS,POWERS,COLORS,key,xy,inside,neighbors,units,adjacent,face,shuffled,dismissalPlan,multiplierLabel} from './public/rules.js';
 const need=(b,m)=>{if(!b)throw Error(m);};
 const integer=(v,min=0,max=1000000)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
 export function createRoom(code,id,name,now=Date.now()){return {code,host:id,stage:'lobby',players:[],board:{},order:[],cursor:0,round:1,turn:0,deadline:0,logs:[],events:[],seq:0,settings:{manual:false},created:now,updated:now};}
@@ -9,6 +9,39 @@ function event(s,type,data={}){s.events.push({id:++s.seq,type,...data});s.events
 export function current(s){return s.players.find(p=>p.id===s.order[s.cursor]);}
 function player(s,id){const p=s.players.find(p=>p.id===id);need(p,'Oyuncu bulunamadı.');return p;}
 function locked(s,p){return s.lock&&s.lock!==p.id;}
+export function configureTestMatch(state, options, now, rng=Math.random){
+ const s=structuredClone(state);
+ if(options.type==='advance'){
+  need(['draft','placement','countdown','playing'].includes(s.stage),'Bu aşamada ilerletme yapılamaz.');
+  s.deadline=now;s.revealUntil=0;
+  const next=tick(s,now,rng);
+  log(next,'Yönetici test için aşamayı ilerletti.');
+  return next;
+ }
+ need(s.stage==='playing','Bu ayar yalnızca maç sırasında kullanılabilir.');
+ const p=player(s,options.player);
+ need(!p.eliminated,'Oyuncu elendi.');
+ if(options.type==='turn'){
+  const cursor=s.order.indexOf(p.id);
+  need(cursor>=0,'Oyuncu hamle sıralamasında yok.');
+  if(current(s).id!==p.id){
+   settle(s,current(s));eliminate(s);
+   if(s.stage==='playing'){s.cursor=cursor;s.revealUntil=0;beginTurn(s,now);}
+  }
+ }else if(options.type==='setup'){
+  need(integer(options.round,1,10000),'Tur 1–10000 arasında olmalı.');
+  need(integer(options.money,0,1000000)&&integer(options.pending,0,1000000),'Kaynaklar 0–1000000 arasında olmalı.');
+  if(options.hp!==undefined)need(integer(options.hp,1,1000000),'General canı 1–1000000 arasında olmalı.');
+  const power=options.power===undefined?null:POWERS.find(item=>item.id===options.power);
+  need(options.power===undefined||power,'Geçersiz güç.');
+  s.round=options.round;p.money=options.money;p.pending=options.pending;
+  if(options.hp!==undefined)for(const [,u]of units(s,p.id))if(u.hp)u.hp=options.hp;
+  if(power)grant(s,p,power.id);
+ }else throw Error('Bilinmeyen yönetici işlemi.');
+ log(s,'Yönetici testi · '+p.name+(options.type==='turn'?' için sıra düzenlendi.':' için kaynaklar ve tur düzenlendi.'));
+ s.updated=now;
+ return s;
+}
 function grant(s,p,id){const pow=POWERS.find(x=>x.id===id);p.inventory[id]=(p.inventory[id]||0)+pow.uses;if(id===1){p.money+=30;p.inventory[id]=0;}if(id===10){p.generalHP=20;for(const [,u]of units(s,p.id))if(u.hp)u.hp=20;p.inventory[id]=0;}}
 function form(s,p,x,y){for(let dy=0;dy<5;dy++)for(let dx=0;dx<2;dx++)s.board[key(x+dx,y+dy)]={owner:p.id,hp:dx===0&&dy===0?p.generalHP:0};}
 function prepare(s,now,rng){for(const p of s.players){if(!generalById(p.generalSkin)){const choices=GENERALS.filter(g=>!s.players.some(q=>q.generalSkin===g.id));p.generalSkin=choices[Math.floor(rng()*choices.length)].id;}p.color=teamColor(p);}s.theme=undefined;s.order=shuffled(s.players.map(p=>p.id),rng);s.cursor=0;if(s.settings.manual){s.stage='placement';s.deadline=now+90000;log(s,'Rastgele yerleşim sırası: '+s.order.map(id=>player(s,id).name).join(' → '));}else{const starts=shuffled([[18,17],[24,17],[30,17],[18,26],[24,26],[30,26]],rng);s.players.forEach((p,i)=>form(s,p,...starts[i]));countdown(s,now);}}
@@ -53,16 +86,16 @@ function use(s,p,a,rng){const before=structuredClone(s.board), army=units(s,p.id
  if(p.inventory[pow.id]>0)p.inventory[pow.id]--;log(s,p.name+': '+pow.name);event(s,'power',{power:pow.id,player:p.id,target:t?.id,source:sourceKey?xy(sourceKey):null,destination:pow.target==='cell'?[a.x,a.y]:t?xy((Object.entries(before).find(([,u])=>u.owner===t.id&&u.hp)||Object.entries(before).find(([,u])=>u.owner===t.id))?.[0]||sourceKey):null,removed:pow.id===4?Object.entries(before).filter(([k,u])=>!s.board[k]&&u.owner===t.id).map(([k])=>xy(k)):undefined,money:pow.id===7?p.money-balance:undefined});
 }
 // Commands commit a clone: a rejected action cannot partially spend resources or damage the board.
-export function act(state,id,a,{now=Date.now(),rng=Math.random}={}){const s=structuredClone(state);const p=player(s,id);need(a&&typeof a.type==='string','Geçersiz hamle.');
+export function act(state,id,a,{now=Date.now(),rng=Math.random,forcedRoll}={}){const s=structuredClone(state);const p=player(s,id);need(a&&typeof a.type==='string','Geçersiz hamle.');
  if(a.type==='rematch'){need(s.stage==='ended'&&s.host===id,'Rövanşı maç sonunda oda kurucusu başlatır.');const fresh=createRoom(s.code,s.host,p.name,now);fresh.settings={...s.settings};fresh.seq=s.seq;fresh.updated=now;for(const q of s.players)addPlayer(fresh,q.id,q.name,q.bot);return fresh;}
  else if(a.type==='settings'){need(s.host===id&&s.stage==='lobby','Ayarları lobide yalnızca kurucu değiştirir.');s.settings.manual=a.manual===true;}
  else if(a.type==='start'){need(s.host===id&&s.stage==='lobby','Oyunu lobide kurucu başlatır.');need(s.players.length>=2,'En az iki oyuncu veya bir bot gerekir.');s.stage='draft';s.deadline=now+90000;for(const q of s.players){q.offers=shuffled(POWERS.map(x=>x.id),rng).slice(0,3);if(q.bot){q.offers.slice(0,2).forEach(x=>grant(s,q,x));q.chosen=true;}}log(s,'Her komutan 3 karttan 2 güç seçiyor.');}
- else if(a.type==='cosmetic'){need(s.stage==='draft'&&!p.chosen,'Seçim aşaması kapandı.');need(a.theme===undefined,'Tema seçimi kaldırıldı.');if(a.dieStyle!==undefined)need(DICE_STYLES.some(d=>d.id===a.dieStyle),'Geçersiz zar stili.');if(a.skin!==undefined){need(generalById(a.skin),'Geçersiz general.');need(!s.players.some(q=>q.id!==id&&q.generalSkin===a.skin),'Bu general başka bir oyuncuda.');p.generalSkin=a.skin;p.color=teamColor(p);}if(a.dieStyle!==undefined)p.dieStyle=a.dieStyle;}
+ else if(a.type==='cosmetic'){need(s.stage==='draft'&&!p.chosen,'Seçim aşaması kapandı.');need(a.theme===undefined,'Tema seçimi kaldırıldı.');if(a.skin!==undefined){need(generalById(a.skin),'Geçersiz general.');need(!s.players.some(q=>q.id!==id&&q.generalSkin===a.skin),'Bu general başka bir oyuncuda.');p.generalSkin=a.skin;p.color=teamColor(p);}}
  else if(a.type==='choose'){need(s.stage==='draft'&&!p.chosen,'Kart seçimi açık değil.');need(Array.isArray(a.powers)&&a.powers.length===2&&new Set(a.powers).size===2&&a.powers.every(x=>p.offers.includes(x)),'Sunulan üç karttan iki farklı güç seç.');a.powers.forEach(x=>grant(s,p,x));p.chosen=true;if(s.players.every(q=>q.chosen))prepare(s,now,rng);}
  else if(a.type==='setup'){need(s.stage==='placement'&&current(s).id===id,'Yerleşim sırası sende değil.');need(inside(a.x,a.y)&&inside(a.x+1,a.y+4),'2×5 dizilim ada içinde olmalı.');for(let y=0;y<5;y++)for(let x=0;x<2;x++)need(!s.board[key(a.x+x,a.y+y)],'Dizilim başka bir oyuncuyla çakışıyor.');form(s,p,a.x,a.y);s.cursor++;s.deadline=now+90000;if(s.cursor===s.order.length){s.cursor=0;countdown(s,now);}}
  else {need(s.stage==='playing'&&!p.eliminated,'Oyun hamle aşamasında değil.');need(current(s).id===id,'Sıra sende değil.');need(now<s.deadline,'Hamle süresi doldu.');need(now>=(s.revealUntil||0),'Zar sonucu gösteriliyor; animasyonun bitmesini bekle.');need(!p.lossRemaining||['dismiss','auto-dismiss','end'].includes(a.type),'Önce eksi çarpanın gerektirdiği askerleri sil.');
  switch(a.type){
- case 'roll':{need(!p.rolled,'Bu hamlede zaten zar attın.');need(!p.reform,'Zardan önce yeniden dizilimi tamamla.');need(integer(a.money,0,p.money)&&integer(a.troops,0,units(s,id).length),'Bahis mevcut dolar ve asker miktarını aşamaz.');need(a.money+a.troops>0,'En az bir birim bahis seç.');need(!a.money||!locked(s,p),'Kasa kilitli; yalnızca asker bahsi yapabilirsin.');const value=face(rng());p.rolled=true;let gain=0,lostMoney=0,lostTroops=0;if(value>0){gain=(a.money+a.troops)*value*(p.double?2:1);p.pending+=gain;}else if(!p.lucky){lostMoney=Math.min(p.money,a.money*-value);p.money-=lostMoney;lostTroops=Math.min(a.troops*-value,units(s,id).filter(([,u])=>!u.hp).length);p.lossRemaining=lostTroops;}s.revealUntil=now+ROLL_REVEAL_MS;s.deadline+=ROLL_REVEAL_MS;s.roll={id:s.seq+1,player:id,value,gain,lostMoney,lostTroops,dieStyle:p.dieStyle||'wood'};event(s,'roll',s.roll);log(s,p.name+' '+multiplierLabel(value)+' attı. '+(gain?gain+' asker kazandı.':lostTroops+' asker seçilecek, '+lostMoney+'$ kayıp.'));break;}
+ case 'roll':{need(!p.rolled,'Bu hamlede zaten zar attın.');need(!p.reform,'Zardan önce yeniden dizilimi tamamla.');need(integer(a.money,0,p.money)&&integer(a.troops,0,units(s,id).length),'Bahis mevcut dolar ve asker miktarını aşamaz.');need(a.money+a.troops>0,'En az bir birim bahis seç.');need(!a.money||!locked(s,p),'Kasa kilitli; yalnızca asker bahsi yapabilirsin.');const test=ODDS.some(o=>o.v===forcedRoll),value=test?forcedRoll:face(rng());p.rolled=true;let gain=0,lostMoney=0,lostTroops=0;if(value>0){gain=(a.money+a.troops)*value*(p.double?2:1);p.pending+=gain;}else if(!p.lucky){lostMoney=Math.min(p.money,a.money*-value);p.money-=lostMoney;lostTroops=Math.min(a.troops*-value,units(s,id).filter(([,u])=>!u.hp).length);p.lossRemaining=lostTroops;}s.revealUntil=now+ROLL_REVEAL_MS;s.deadline+=ROLL_REVEAL_MS;s.roll={id:s.seq+1,player:id,value,gain,lostMoney,lostTroops,test};event(s,'roll',s.roll);log(s,p.name+' '+multiplierLabel(value)+' attı. '+(test?'[Yönetici testi] ':'')+(gain?gain+' asker kazandı.':lostTroops+' asker seçilecek, '+lostMoney+'$ kayıp.'));break;}
  case 'dismiss':need(inside(a.x,a.y),'Ada dışında bir kare seçtin.');dismiss(s,p,key(a.x,a.y));break;
  case 'auto-dismiss':finishLoss(s,p);break;
  case 'place':place(s,p,a.x,a.y);break;
@@ -82,8 +115,8 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random}={}){const s=stru
  }if(s.stage==='playing'){eliminate(s);if(s.stage==='playing'&&current(s)?.eliminated)endTurn(s,now);}s.updated=now;return s;
 }
 export function tick(state,now=Date.now(),rng=Math.random){if(now<state.deadline||['lobby','ended'].includes(state.stage))return state;let s=structuredClone(state);if(s.stage==='draft'){for(const p of s.players)if(!p.chosen){p.offers.slice(0,2).forEach(x=>grant(s,p,x));p.chosen=true;}prepare(s,now,rng);}else if(s.stage==='placement'){const p=current(s);outer:for(let y=15;y<45;y++)for(let x=15;x<45;x++){let ok=true;for(let dy=0;dy<5;dy++)for(let dx=0;dx<2;dx++)if(s.board[key(x+dx,y+dy)])ok=false;if(ok){s=act(s,p.id,{type:'setup',x,y},{now,rng});break outer;}}}else if(s.stage==='countdown'){s.stage='playing';beginTurn(s,now);}else endTurn(s,now);s.updated=now;return s;}
-export function botStep(s,now=Date.now(),rng=Math.random){const p=current(s);if(!p?.bot)return s;if(s.stage==='placement')return tick({...s,deadline:now},now,rng);if(s.stage!=='playing'||now<(s.revealUntil||0))return s;let a;
+export function botStep(s,now=Date.now(),rng=Math.random,forcedRoll){const p=current(s);if(!p?.bot)return s;if(s.stage==='placement')return tick({...s,deadline:now},now,rng);if(s.stage!=='playing'||now<(s.revealUntil||0))return s;let a;
  if(!p.rolled&&!p.reform)a={type:'roll',troops:Math.max(1,Math.ceil(units(s,p.id).length*.35)),money:locked(s,p)?0:Math.min(p.money,3)};
  else if(p.lossRemaining>0){const candidate=units(s,p.id).find(([k])=>dismissalPlan(s,p.id,k).ok);need(candidate,'Bot için silinebilecek kare bulunamadı.');const [x,y]=xy(candidate[0]);a={type:'dismiss',x,y};}
  else if(p.pending+p.reform>0){let candidates=[];for(const [k]of units(s,p.id))for(const [x,y]of neighbors(...xy(k))){const u=s.board[key(x,y)];if(!u||u.owner!==p.id&&s.round>5&&!player(s,u.owner).shield&&p.pending>0)candidates.push([x,y,u]);}const enemy=Object.entries(s.board).filter(([,u])=>u.owner!==p.id&&u.hp);candidates=shuffled(candidates,rng).sort((a,b)=>{const score=c=>c[2]?-100:Math.min(100,...enemy.map(([k])=>{const [x,y]=xy(k);return Math.abs(x-c[0])+Math.abs(y-c[1]);}));return score(a)-score(b);});const target=candidates.find(([x,y,u])=>adjacent(s,p.id,x,y)&&(!u||u.hp>1||canRemove(s,u.owner,key(x,y))));a=target?{type:'place',x:target[0],y:target[1]}:{type:'end'};}
- else a={type:'end'};return act(s,p.id,a,{now,rng});}
+ else a={type:'end'};return act(s,p.id,a,{now,rng,forcedRoll});}

@@ -3,6 +3,15 @@ export const REEL_DURATION_MS=5000;
 export const ROLL_REVEAL_MS=REEL_DURATION_MS;
 export const multiplierLabel=value=>(value<0?'−':'+')+Math.abs(value);
 export const ODDS=[{v:1,w:4500},{v:-1,w:3500},{v:2,w:750},{v:-2,w:750},{v:5,w:200},{v:-5,w:200},{v:10,w:100}];
+export const REEL_PITCH=108;
+export const reelEase=t=>1-(1-t)**4;
+export function reelPlan(value,rng=Math.random){
+ const start=4, stop=32;
+ const cards=Array.from({length:40},()=>face(rng()));
+ cards[stop]=value;
+ const edge=rng()<.5?12:88;
+ return {cards,startX:start*REEL_PITCH+50,stopX:stop*REEL_PITCH+edge,stop};
+}
 export const COLORS=['#4d9fe8','#e87864','#b38be2','#efbd52','#63bd90','#ed91b1'];
 export const POWERS=[
  {id:1,name:'Dolu kese',icon:'◈',price:30,uses:1,desc:'Kasana 30$ ekle. Başlangıçta seçilirse hemen uygulanır.'},

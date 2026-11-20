@@ -19,11 +19,6 @@ body{--game-accent:#46c9ff;--game-deep:#163852}body[data-theme=volcanic]{--game-
 .general-options{grid-template-columns:repeat(3,1fr)}.general-options img{width:100%;height:140px;object-fit:contain;background:radial-gradient(ellipse,#35586c,#101b29);border-radius:10px}.general-options button{padding:10px;border:2px solid #6a8092}.general-options b{display:block;font-size:15px;margin-top:7px}@media(max-width:600px){.general-options{grid-template-columns:repeat(2,1fr)}.general-options img{height:110px}}
 
 /* The board remains visible beneath the dice and brief combat notices. */
-.dice-stage{position:fixed;inset:0;z-index:18;pointer-events:none;background:radial-gradient(ellipse at center,transparent 30%,#08132360 100%)}
-#dice-canvas{display:block;width:100%;height:100%}
-.dice-caption{position:absolute;inset:19% 0 auto;display:flex;align-items:center;justify-content:center;gap:12px;pointer-events:none}
-.dice-caption span,.dice-caption strong{background:#101c2beb;color:#f8e6b9;border:1px solid #ab9163;padding:8px 14px;border-radius:7px;box-shadow:0 3px 15px #12131c60;font-weight:800}
-#dice-face{font-size:19px;min-width:46px;text-align:center}
 #reel-result.dice-result{--result-ink:#75f4cf;position:fixed;z-index:20;pointer-events:none;inset:70% auto auto 50%;transform:translateX(-50%);width:max-content;max-width:min(650px,92vw);margin:0;padding:12px 18px;background:#0e192af4;color:#fff7e2;border:1px solid var(--result-ink);border-radius:8px;text-align:center;font-size:clamp(14px,2.2vw,23px);font-weight:900;box-shadow:0 0 28px color-mix(in srgb,var(--result-ink),transparent 63%);animation:dice-stamp .54s cubic-bezier(.2,.87,.24,1) both}
 #reel-result.dice-result[data-tone=loss]{--result-ink:#ff8298}
 #reel-result.dice-result[data-tone=rare]{--result-ink:#ffce68}
@@ -44,10 +39,6 @@ body{--game-accent:#46c9ff;--game-deep:#163852}body[data-theme=volcanic]{--game-
 @keyframes power-in{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
 .general-options button{border-bottom:4px solid var(--unit-color)}
 .general-options button[aria-pressed=true]{outline:2px solid var(--unit-color)}
-.dice-options{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:10px 0 22px}
-.dice-options button{display:grid;place-items:center;gap:6px;min-height:57px;font-size:12px;padding:7px}
-.dice-options button[aria-pressed=true]{outline:2px solid var(--die-edge)}
-.dice-options button span{background:var(--die-base);color:white;border:2px solid var(--die-edge);clip-path:polygon(50% 0,98% 34%,80% 97%,20% 97%,2% 34%);padding:6px 10px;font-weight:900}
 @media(max-width:760px){.dice-caption{top:23%}.power-notice{top:25%;padding:8px 10px;gap:8px}.power-notice img{width:38px;height:38px}#reel-result.dice-result{inset-block-start:54%;padding:9px 12px}}
 @media(prefers-reduced-motion:reduce){.power-notice,#reel-result.dice-result{animation:none}}
 
@@ -60,3 +51,14 @@ body{--game-accent:#46c9ff;--game-deep:#163852}body[data-theme=volcanic]{--game-
  .hud strong{font-size:10px;line-height:1.2}
  .hud .turn-owner strong,.hud .turn-owner.is-mine strong{font-size:11px}
 }
+
+#reel-overlay{padding:10px;background:#09121eb3;backdrop-filter:blur(3px)}.reel-shell{max-width:min(760px,94vw);padding:22px 0 27px;overflow:hidden}.reel-shell h2{margin:0 10px 18px;font-size:clamp(17px,3.5vw,27px)}.reel-window{width:100%;height:145px}#reel-track{left:50%;gap:8px}#reel-track .reel-card{box-sizing:border-box;width:100px;min-width:100px}.reel-card.winner{border-color:#ffecad;box-shadow:inset 0 0 32px #ffdfa877;color:#fff5cc}.reel-window .needle{left:50%;transform:translateX(-50%)}
+#admin-dialog{width:min(640px,calc(100vw - 28px));max-height:90vh;overflow:auto}
+#admin-dialog fieldset{border:0;padding:0;margin:0;min-inline-size:0}
+#admin-dialog label{display:grid;gap:5px;font-size:12px;margin:4px 0 8px}
+#admin-dialog select,#admin-dialog input{width:100%;box-sizing:border-box;border:1px solid #52677e;border-radius:6px;background:#132338;color:#f5f1e3;padding:8px;min-height:38px}
+#admin-dialog button{min-height:38px}
+#admin-dialog fieldset:disabled{opacity:.55}
+#admin-status{min-height:1.3em;color:#a1e5ff;font-size:13px;margin:10px 0 0}
+.admin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0}
+#admin-open{background:#132338;border-color:#bf9560;color:#fff1cb;white-space:nowrap}

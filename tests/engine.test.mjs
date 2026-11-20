@@ -88,14 +88,10 @@ test('rank transfer and withdrawal include the selected general and team colors'
  }
  assert.equal(s.board['11,10'].hp,8);
 });
-test('a player may pick a die style which is carried by roll events without changing the roll',()=>{
- let s=createRoom('112233','a','A',now);addPlayer(s,'a','A');addPlayer(s,'b','B');
- s=run(s,{type:'start'});
- s=run(s,{type:'cosmetic',skin:'fairy-2',dieStyle:'frost'});
- assert.throws(()=>run(s,{type:'cosmetic',skin:'fairy-2'},'b'));
- assert.throws(()=>run(s,{type:'cosmetic',dieStyle:'bad'}));
- assert.equal(s.players[0].color,'#59d7f3');
- s=fixture();s.players[0].dieStyle='frost';
- s=run(s,{type:'roll',troops:1,money:0},'a',()=>.5);
- assert.equal(s.roll.dieStyle,'frost');assert.equal(s.roll.value,-1);assert.equal(s.roll.lostTroops,1);
+test('only trusted roll options override the result and still apply normal bet validation',()=>{
+ let s=fixture();assert.throws(()=>act(s,'a',{type:'roll',troops:11,money:0},{now:now+6000,forcedRoll:10}));
+ const ignored=act(s,'a',{type:'roll',troops:1,money:0,result:10,forcedRoll:10},{now:now+6000,rng:()=>.5});
+ assert.equal(ignored.roll.value,-1);assert.equal(ignored.roll.test,false);
+ s=act(s,'a',{type:'roll',troops:2,money:0},{now:now+6000,rng:()=>.5,forcedRoll:10});
+ assert.equal(s.roll.value,10);assert.equal(s.roll.test,true);assert.equal(s.players[0].pending,20);
 });

@@ -2,7 +2,7 @@
 
 20 Kasım 2026
 
-General seçiminde dört zar stili bulunur. Ceviz, Buz, Kor ve Yeşim arasından seçip iki güç kartını onayla. Animasyon sunucudan gelen +/− değerinde durur. Zarın yüzleri ve seçilen stil bahis olasılıklarını belirlemez.
+Şans çarkı sabit merkez göstergeli kayan kart şeridi kullanır. Sonuç sunucuda belirlenir. Yönetici kurulumu YONETICI-TESTI.md dosyasında anlatılıyor.
 
 General paleti takım karolarına, başlıklara, portrelere ve çekilme efektine uygulanır. Altı generalden her biri bir maçta bir takım tarafından seçilebilir. Normal askerlerin taşınan kalkanı, mızrağı ve zırhı aynıdır. KayKit görselleri Canvas üzerinde 2D olarak çizilir. Sprite'ların el ve silah hareketi iskelet üzerinden yeniden yapılmadı.
 
@@ -27,4 +27,4 @@ ScrollCraft'ın derinlik ve zamanlama yaklaşımı olay bazlı uygulandı. Tahta
 
 ## Kurulum
 
-ZIP'i aç. engine.mjs, server.mjs, package.json, public ve tests dosya/klasörlerini mevcut oyun deponun köküne yerleştir. public klasörünün alt yolları korunmalı. Sunucuyu yeniden başlatıp yeni maçta general ve zar stili seç. Barındırılan sürümde ilgili commit'i yeniden dağıt ve tarayıcıyı yenile.
+ZIP'i aç. engine.mjs, server.mjs, package.json, public ve tests dosya/klasörlerini mevcut oyun deponun köküne yerleştir. public klasörünün alt yolları korunmalı. Sunucuyu yeniden başlatıp yeni maçta generalini seç. Barındırılan sürümde ilgili commit'i yeniden dağıt ve tarayıcıyı yenile.

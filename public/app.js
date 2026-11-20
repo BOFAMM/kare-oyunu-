@@ -1,8 +1,8 @@
-import {GENERALS,DICE_STYLES,generalById,teamColor} from './cosmetics.js';
-import {startDice} from './dice.js';
+import {GENERALS,generalById,teamColor} from './cosmetics.js';
 import {powerNotice,FX_DURATION} from './battle-fx.js';
-import {betPreview,POWERS,units,xy,neighbors,key,adjacent,multiplierLabel,REEL_DURATION_MS} from './rules.js';
+import {betPreview,POWERS,units,xy,neighbors,key,adjacent,multiplierLabel,REEL_DURATION_MS,REEL_PITCH,reelPlan,reelEase} from './rules.js';
 import {Board} from './board.js';
+import {installAdmin} from './admin.js';
 const $=id=>document.getElementById(id),show=(id,on=true)=>$(id).classList.toggle('hidden',!on);
 let state=null,myId=null,token=sessionStorage.getItem('ada-session'),seen=0,target=null,picks=[],draftKey='',queue=Promise.resolve(),animating=false,polling=false,leaving=false,soundOn=localStorage.getItem('ada-sound')!=='off',audio=null,toastTimer,previousStage='',endedShown=false,connectionFailures=0;
 let lastPlaceSound=0,lastBet=null;
@@ -65,37 +65,50 @@ function showPowerNotice(){
 function diceResult(e){
  const face=multiplierLabel(e.value);
  const summary=e.gain?e.gain+' asker kazandı':e.lostTroops?e.lostTroops+' asker geri çekilecek · '+(e.lostMoney||0)+' $ kayıp':e.lostMoney?e.lostMoney+' $ kayıp':'Kayıp yok';
- $('dice-face').textContent=face;show('dice-face');
+
  const result=$('reel-result');result.dataset.value=face;result.dataset.tone=e.value<0?'loss':e.value>=5?'rare':'win';
- result.textContent=face+' · '+(state.players.find(p=>p.id===e.player)?.name||'Komutan')+' · '+summary;
+ result.textContent=face+' · '+(state.players.find(p=>p.id===e.player)?.name||'Komutan')+' · '+summary+(e.test?' · Yönetici testi':'');
  show('reel-result');clearTimeout(resultTimer);resultTimer=setTimeout(()=>show('reel-result',false),3000);
  battleSound(e.value<0?'lock':e.value>=5?'charge':'impact',e.value<0?'lose':'win');
 }
 async function reel(e){
- animating=true;let stop,landed=false;
- const land=()=>{if(!landed){landed=true;diceResult(e);}};
+ animating=true;
+ const clicks=[];
+ let animation;
  try{
-  $('modal').close();clearTarget();render();show('reel-overlay');show('dice-face',false);show('reel-result',false);
-  $('reel-title').textContent=(state.players.find(p=>p.id===e.player)?.name||'Komutan')+' zarı attı';
-  const duration=board.reduced?180:REEL_DURATION_MS;
-  const canvas=$('dice-canvas');
-  const anchor=units(state,e.player).sort(([,a],[,b])=>b.hp-a.hp)[0];
-  const tile=anchor&&board.point?.(...xy(anchor[0]));
-  const width=canvas.clientWidth,height=canvas.clientHeight;
-  const left=width>850?width*.31:width*.27,right=width>850?width*.65:width*.73;
-  const landing={x:Math.max(left,Math.min(right,tile?.x??width*.5)),y:Math.max(height*.37,Math.min(height*.68,tile?.y??height*.6))};
-  if(!board.reduced)battleSound('launch','tick');
-  stop=startDice(canvas,e,duration,landing,board.reduced,land);
+  $('modal').close();clearTarget();render();
+  show('reel-overlay');show('reel-result',false);
+  const name=state.players.find(p=>p.id===e.player)?.name||'Komutan';
+  $('reel-title').textContent=name+' çarkı çevirdi'+(e.test?' · Yönetici testi':'');
+  const plan=reelPlan(e.value),track=$('reel-track'),move=px=>'translateX(-'+px+'px)';
+  track.innerHTML=plan.cards.map((value,i)=>'<div id="reel-card-'+i+'" class="reel-card'+(value<0?' negative':'')+(Math.abs(value)===5?' rare':'')+(value===10?' legendary':'')+'">'+multiplierLabel(value)+'</div>').join('');
+  const distance=plan.stopX-plan.startX;
+  const duration=board.reduced?180:REEL_DURATION_MS-420;
+  track.style.transform=move(plan.startX);
+  if(!board.reduced){
+   const frames=Array.from({length:121},(_,i)=>({offset:i/120,transform:move(plan.startX+distance*reelEase(i/120))}));
+   animation=track.animate(frames,{duration,easing:'linear',fill:'forwards'});
+   for(let edge=(Math.floor(plan.startX/REEL_PITCH)+1)*REEL_PITCH;edge<=plan.stopX;edge+=REEL_PITCH){
+    const time=duration*(1-(1-(edge-plan.startX)/distance)**.25);
+    clicks.push(setTimeout(()=>tone('tick'),time));
+   }
+  }
   await new Promise(resolve=>setTimeout(resolve,duration));
-  land();
- }finally{stop?.();show('reel-overlay',false);animating=false;render();}
+  track.style.transform=move(plan.stopX);animation?.cancel();animation=null;
+  $('reel-card-'+plan.stop).classList.add('winner');
+  diceResult(e);
+  if(!board.reduced)await new Promise(resolve=>setTimeout(resolve,420));
+ }finally{
+  for(const timer of clicks)clearTimeout(timer);
+  animation?.cancel();show('reel-overlay',false);animating=false;render();
+ }
 }
 
 function shop(){if(!myTurn())return;const generals=units(state,myId).filter(([,u])=>u.hp).length;modal('İskele mağazası',`<p class="shop-intro">Kasanda <b>${me().money}$</b> var. Sadece kendi hamlende alışveriş yapabilirsin.</p><div class="split" style="margin-bottom:20px"><button id="buy-general">♛ General · ${(generals+1)*10}$</button><button id="recruit-open">⚑ 1 asker = 1$</button></div><div class="shop-grid">${POWERS.map(pow=>powerCard(pow,`<button data-buy="${pow.id}" ${me().money<pow.price?'disabled':''}>${pow.price}$ · Satın al</button>`)).join('')}</div>`);$('buy-general').disabled=generals===0;$('buy-general').title=generals===0?'Generalin kalmadığı için satın alamazsın.':'';$('buy-general').onclick=()=>setTarget({type:'general'},'Yeni general için orduna kenardan bağlı boş bir kare seç.');$('recruit-open').onclick=()=>{modal('Takviye çağır',`<p>Kasandan 1$ karşılığında 1 yerleştirme hakkı al.</p><label style="margin-top:15px">Asker sayısı<input id="recruit-amount" type="number" min="1" max="${me().money}" value="1"></label><button id="recruit-confirm" class="primary">Takviyeyi al</button>`);$('recruit-confirm').onclick=async()=>{if(await command({type:'recruit',amount:Number($('recruit-amount').value)})){$('modal').close();toast('Takviyeler hazır. Haritada kenardan büyü.');}};};document.querySelectorAll('[data-buy]').forEach(b=>b.onclick=async()=>{b.disabled=true;if(await command({type:'buy',power:Number(b.dataset.buy)})){tone('power');shop();}else b.disabled=false;});}
 function inventory(){const p=me();modal('Güç çantası',`<p class="shop-intro">Güçler 3. turda, rakibe etki eden güçler 6. turda açılır. Hedefe tıklamadan kullanım hakkı harcanmaz.</p><div class="shop-grid">${POWERS.filter(pow=>p.inventory[pow.id]).map(pow=>powerCard(pow,`<button data-power="${pow.id}" ${powerBlocked(pow)?'disabled':''}>Kullan · ${p.inventory[pow.id]<0?'∞':p.inventory[pow.id]} hak</button>${powerBlocked(pow)?'<p role="status">'+esc(powerBlocked(pow))+'</p>':''}`)).join('')||'<p>Çantan boş. İskele mağazasına uğrayabilirsin.</p>'}</div>`);document.querySelectorAll('[data-power]').forEach(b=>b.onclick=()=>activate(Number(b.dataset.power)));}
 function powerBlocked(pow){if(!myTurn())return 'Sıra sende değil.';if(me().lossRemaining)return 'Önce kaybedilecek askerleri seç.';if(animating||Date.now()<(state.revealUntil||0))return 'Zar animasyonunun bitmesini bekle.';if(state.round<3)return 'Bu güç 3. turda açılır.';if(state.lock&&state.lock!==myId)return 'Kasa kilidi sırasında güç kullanamazsın.';if(pow.hostile&&state.round<=5)return 'Rakibe etki eden güçler 6. turda açılır.';if([9,12].includes(pow.id)&&me().rolled)return 'Bu gücü zardan önce kullan.';return ''; }
 async function activate(id){const pow=POWERS.find(x=>x.id===id);const reason=powerBlocked(pow);if(reason){toast(reason);return;}if(pow.target==='cell'){setTarget({type:'power',power:id},pow.id===5?'3×3 alanın merkezini seç: birim başına 1 hasar; kendi generallerin korunur.': 'Generalinin taşınacağı boş kareyi seç. Formasyon korunur.');}else if(pow.target==='player'){modal(pow.name,`<p class="shop-intro">${esc(pow.desc)}</p>`+state.players.filter(p=>p.id!==myId&&!p.eliminated).map(p=>`<button class="target-player" data-player="${p.id}">${esc(p.name)} · ${units(state,p.id).length} asker · ${p.money}$</button>`).join(''));document.querySelectorAll('[data-player]').forEach(b=>b.onclick=async()=>{if(await command({type:'power',power:id,target:b.dataset.player}))$('modal').close();});}else if(await command({type:'power',power:id})){$('modal').close();if(id===15)toast('Askerlerini yeniden diz. Süre sonunda kalanlar eski karelerine döner.');}}
-function rules(){modal('Ada defteri',`<ol class="rules-list"><li>Her komutan 1 general ve 9 askerle başlar. <b>Son karesini kaybeden elenir.</b> General olmadan oynamaya devam edebilirsin ama yeni general alamazsın. General zarla ölmez.</li><li>Her tam tur, hayattaki herkesin bir hamlesidir. Hamle 45 saniye. İlk 5 tur barış; savaş 6. turda.</li><li>Asker ve dolar bahsini birlikte koyabilirsin. Kazanç çarpanında toplam bahis × çarpan kadar asker kazanırsın. Bahis teminatı korunur. Eksi sonuçta her kaynak bahis × çarpan kadar azalır; mevcut miktarla sınırlıdır.</li><li><b>+1 %45 · −1 %35 · +2 %7,5 · −2 %7,5 · +5 %2 · −5 %2 · +10 %1.</b> Zar sonucu sunucuda belirlenir. Zar stili ihtimalleri değiştirmez.</li><li>Kendi bağlı bölgenin kenarına asker koy; general yokken de büyüyebilirsin. Sol tuşla sürükleyerek çiz. Köşegen bağlantı sayılmaz. Eksi çarpanda silinecek askerleri sen seçersin. Generalin karesini silersen rütbesi mevcut canıyla en yakın normal askere geçer. Bağlantıyı koparamazsın; general sayısı korunur. Süre sonunda veya hamleyi bitirince kalan kayıp otomatik tamamlanır. Savaşta da bağlantıyı koparan kare yerine dış kenarlara saldır.</li><li>Rakip askerin karesine 1 asker koyarak ele geçir. Generaline her yerleştirme 1 hasar verir. General düştüğünde diğer birlikler kalır; son kare kaybedilince elenirsin.</li><li>Kazanılan 1 asker = 1$. %25/50/75/100 ile dönüştür. Süre sonunda kalan kazanç dolara döner. Kasa kilitliyse bekleyen asker olarak korunur.</li><li>Mağazadan orduna bağlı boş kareye yeni general yerleştir: (general sayısı + 1) × 10$. Kazançla kendi generalini iyileştirebilirsin; can tavanı yok.</li><li>3 karttan 2 güç seç. 15 tanımlı güç var; metindeki 16. güç tarif edilmemiş. Güçler 3. turda açılır; rakibe etki edenler barışta kullanılamaz.</li><li><b>Kontroller:</b> tekerlekle yakınlaştır, orta/sağ tuşla haritayı sürükle. Telefonda dokunarak yerleştir, sürükleyerek gezin, iki parmakla yakınlaştır. Harita odaklıyken oklar + Enter ile yerleştir, WASD ile gezin.</li><li>Oda kodunu yalnızca aynı sunucuya bağlananlar kullanabilir. Sekme oturumu yenilemede geri gelir. Kurucu 30 saniye yoksa bağlı başka bir oyuncu kurucu olur.</li></ol><p class="muted">Tasarım varsayımları: Mağaza fiyatları ilk denge değerleridir. Zehir ve hırsızlık generalleri öldürmez. Yeniden dizilim generalleri ve aralarındaki zorunlu bağlantıları sabit tutar; bitmeyen dizilim eski boş karelere geri yüklenir. Oyun son hayatta kalan komutanla biter; tur sınırı yok.</p><p class="muted">Sesler: Helton Yan, FREE Retro Mecha SFX (CC BY 4.0); oyun için kısaltıldı ve Ogg biçimine dönüştürüldü. Modeller: Kay Lousberg. Efekt uyarlaması: Binbun3D.</p>`);}
+function rules(){modal('Ada defteri',`<ol class="rules-list"><li>Her komutan 1 general ve 9 askerle başlar. <b>Son karesini kaybeden elenir.</b> General olmadan oynamaya devam edebilirsin ama yeni general alamazsın. General zarla ölmez.</li><li>Her tam tur, hayattaki herkesin bir hamlesidir. Hamle 45 saniye. İlk 5 tur barış; savaş 6. turda.</li><li>Asker ve dolar bahsini birlikte koyabilirsin. Kazanç çarpanında toplam bahis × çarpan kadar asker kazanırsın. Bahis teminatı korunur. Eksi sonuçta her kaynak bahis × çarpan kadar azalır; mevcut miktarla sınırlıdır.</li><li><b>+1 %45 · −1 %35 · +2 %7,5 · −2 %7,5 · +5 %2 · −5 %2 · +10 %1.</b> Zar sonucu sunucuda belirlenir. Şerit, sunucunun belirlediği sonucu gösterir.</li><li>Kendi bağlı bölgenin kenarına asker koy; general yokken de büyüyebilirsin. Sol tuşla sürükleyerek çiz. Köşegen bağlantı sayılmaz. Eksi çarpanda silinecek askerleri sen seçersin. Generalin karesini silersen rütbesi mevcut canıyla en yakın normal askere geçer. Bağlantıyı koparamazsın; general sayısı korunur. Süre sonunda veya hamleyi bitirince kalan kayıp otomatik tamamlanır. Savaşta da bağlantıyı koparan kare yerine dış kenarlara saldır.</li><li>Rakip askerin karesine 1 asker koyarak ele geçir. Generaline her yerleştirme 1 hasar verir. General düştüğünde diğer birlikler kalır; son kare kaybedilince elenirsin.</li><li>Kazanılan 1 asker = 1$. %25/50/75/100 ile dönüştür. Süre sonunda kalan kazanç dolara döner. Kasa kilitliyse bekleyen asker olarak korunur.</li><li>Mağazadan orduna bağlı boş kareye yeni general yerleştir: (general sayısı + 1) × 10$. Kazançla kendi generalini iyileştirebilirsin; can tavanı yok.</li><li>3 karttan 2 güç seç. 15 tanımlı güç var; metindeki 16. güç tarif edilmemiş. Güçler 3. turda açılır; rakibe etki edenler barışta kullanılamaz.</li><li><b>Kontroller:</b> tekerlekle yakınlaştır, orta/sağ tuşla haritayı sürükle. Telefonda dokunarak yerleştir, sürükleyerek gezin, iki parmakla yakınlaştır. Harita odaklıyken oklar + Enter ile yerleştir, WASD ile gezin.</li><li>Oda kodunu yalnızca aynı sunucuya bağlananlar kullanabilir. Sekme oturumu yenilemede geri gelir. Kurucu 30 saniye yoksa bağlı başka bir oyuncu kurucu olur.</li></ol><p class="muted">Tasarım varsayımları: Mağaza fiyatları ilk denge değerleridir. Zehir ve hırsızlık generalleri öldürmez. Yeniden dizilim generalleri ve aralarındaki zorunlu bağlantıları sabit tutar; bitmeyen dizilim eski boş karelere geri yüklenir. Oyun son hayatta kalan komutanla biter; tur sınırı yok.</p><p class="muted">Sesler: Helton Yan, FREE Retro Mecha SFX (CC BY 4.0); oyun için kısaltıldı ve Ogg biçimine dönüştürüldü. Modeller: Kay Lousberg. Efekt uyarlaması: Binbun3D.</p>`);}
 async function reset(){if(state?.stage==='lobby')await command({type:'leave'});sessionStorage.removeItem('ada-session');location.reload();}
 $('solo').onclick=()=>connect('create',true);$('create').onclick=()=>connect('create');$('join').onclick=()=>connect('join');$('join-open').onclick=()=>{show('join-form');$('code').focus();};$('bot').onclick=()=>command({type:'bot'});$('start').onclick=()=>command({type:'start'});$('manual').onchange=()=>command({type:'settings',manual:$('manual').checked});$('copy-code').onclick=async()=>{try{await navigator.clipboard.writeText(state.code);toast('Oda kodu kopyalandı.');}catch{toast('Oda kodu: '+state.code);}};
 $('draft-cards').onclick=e=>{const b=e.target.closest('[data-pick]');if(!b||me()?.chosen)return;const id=Number(b.dataset.pick);if(picks.includes(id))picks=picks.filter(x=>x!==id);else if(picks.length<2)picks.push(id);document.querySelectorAll('[data-pick]').forEach(c=>{const chosen=picks.includes(Number(c.dataset.pick));c.classList.toggle('selected',chosen);c.setAttribute('aria-pressed',String(chosen));});$('confirm-powers').disabled=picks.length!==2;$('confirm-powers').textContent=picks.length===2?'Bu iki güçle yola çık':'İki güç seç';tone();};$('confirm-powers').onclick=async()=>{$('confirm-powers').disabled=true;await command({type:'choose',powers:picks});};
@@ -116,14 +129,12 @@ $('coach-hide').onclick=()=>{localStorage.setItem('ada-coach','done');show('coac
 function renderCosmetics(){
  const p=me(),container=$('cosmetic-selection');
  const occupied=state.players.filter(q=>q.id!==p.id).map(q=>q.generalSkin);
- const signature=[p.generalSkin,p.dieStyle,p.chosen,...occupied].join(':');
+ const signature=[p.generalSkin,p.chosen,...occupied].join(':');
  if(container.dataset.selection===signature)return;
  container.dataset.selection=signature;
  const generals=GENERALS.map(g=>'<button data-skin="'+g.id+'" '+(p.chosen||occupied.includes(g.id)?'disabled ':'')+'aria-pressed="'+(p.generalSkin===g.id)+'" style="--unit-color:'+g.color+'"><img src="'+g.portrait+'" alt="" width="128" height="128"><b>'+g.name+'</b>'+(occupied.includes(g.id)?'<small>Seçildi</small>':'')+'</button>');
- const dice=DICE_STYLES.map(d=>'<button data-die="'+d.id+'" '+(p.chosen?'disabled ':'')+'aria-pressed="'+((p.dieStyle||'wood')===d.id)+'" style="--die-edge:'+d.edge+';--die-base:'+d.base+'"><span aria-hidden="true">+2</span>'+d.name+'</button>');
- container.innerHTML='<h2>Generalini seç</h2><div class="general-options">'+generals.join('')+'</div><h2>Zar stilini seç</h2><div class="dice-options">'+dice.join('')+'</div>';
+ container.innerHTML='<h2>Generalini seç</h2><div class="general-options">'+generals.join('')+'</div>';
  container.querySelectorAll('[data-skin]').forEach(b=>b.onclick=()=>command({type:'cosmetic',skin:b.dataset.skin}));
- container.querySelectorAll('[data-die]').forEach(b=>b.onclick=()=>command({type:'cosmetic',dieStyle:b.dataset.die}));
 }
 
 function setBet(t,m){if(!me())return;const locked=state.lock&&state.lock!==myId;$('bet-troops').value=Math.max(0,Math.min(units(state,myId).length,Math.floor(t)||0));$('bet-money').value=locked?0:Math.max(0,Math.min(me().money,Math.floor(m)||0));preview();}
@@ -131,3 +142,5 @@ $('troop-slider').oninput=()=>setBet(Number($('troop-slider').value),Number($('b
 for(let i=1;i<=4;i++)$('preset-'+i).onclick=()=>setBet(units(state,myId).length*i/4,me().money*i/4);
 $('last-bet').onclick=()=>{if(lastBet)setBet(lastBet.troops,lastBet.money);else toast('Bu oturumda henüz bahis yok.');};$('skip-roll').onclick=()=>command({type:'end'});
 $('bet-section').onkeydown=e=>{if(!myTurn()||me().rolled||animating||e.altKey||e.ctrlKey||e.metaKey)return;const id=e.target.id;if(e.key==='Enter'){e.preventDefault();if(!$('roll').disabled)$('roll').onclick();return;}if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const money=['money-slider','bet-money'].includes(id),delta=(e.key==='ArrowRight'?1:-1)*(e.shiftKey?5:1);setBet(Number($('bet-troops').value)+(money?0:delta),Number($('bet-money').value)+(money?delta:0));}else if(!['bet-troops','bet-money'].includes(id)){if(/^[1-4]$/.test(e.key)){e.preventDefault();$('preset-'+e.key).onclick();}if(e.key.toLowerCase()==='r'){e.preventDefault();$('last-bet').onclick();}}};
+
+installAdmin(()=>state?.code);
