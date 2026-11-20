@@ -78,3 +78,24 @@ test('119 general-less troops can all be lost and player is eliminated',()=>{let
 test('reform does not block powers or turn relocated troops into attack points',()=>{let s=fixture();s.round=6;s.board={'10,10':{owner:'a',hp:10},'10,11':{owner:'a',hp:0},'10,12':{owner:'a',hp:0},'11,10':{owner:'b',hp:10}};s.players[0].inventory={15:-1,8:3,5:3};s=run(s,{type:'power',power:15});assert.equal(s.players[0].reform,2);assert.throws(()=>run(s,{type:'place',x:11,y:10}));s=run(s,{type:'power',power:8,target:'b'});assert.equal(s.players[1].skip,1);s.players[0].pending=1;s=run(s,{type:'place',x:11,y:10});assert.equal(s.players[0].pending,0);assert.equal(s.players[0].reform,2);assert.equal(s.board['11,10'].hp,9);});
 test('teleport during reform restores and moves all units without duplicates',()=>{let s=fixture();s.round=6;s.players[0].inventory={15:-1,6:1};const n=units(s,'a').length;s=run(s,{type:'power',power:15});s=run(s,{type:'power',power:6,x:2,y:2});assert.equal(units(s,'a').length,n);assert.equal(s.players[0].reform,0);});
 test('general-less reform retains an anchor and expires without elimination',()=>{let s=fixture();s.round=6;s.board={'10,10':{owner:'a',hp:0},'11,10':{owner:'a',hp:0},'30,30':{owner:'b',hp:10}};s.players[0].inventory={15:-1};s=run(s,{type:'power',power:15});assert.equal(units(s,'a').length,1);s=run(s,{type:'end'});assert.equal(units(s,'a').length,2);assert.equal(s.players[0].eliminated,false);});
+
+test('rank transfer and withdrawal include the selected general and team colors',()=>{
+ let s=fixture();s.board={'10,10':{owner:'a',hp:8},'11,10':{owner:'a',hp:0},'40,40':{owner:'b',hp:10}};
+ s.players[0].generalSkin='fairy-2';s.players[0].color='#ff0000';s.players[0].lossRemaining=1;
+ s=run(s,{type:'dismiss',x:10,y:10});
+ for(const kind of ['promote','dismiss']){
+  const found=s.events.find(e=>e.type===kind);assert.equal(found.player,'a');assert.equal(found.skin,'fairy-2');assert.equal(found.color,'#59d7f3');
+ }
+ assert.equal(s.board['11,10'].hp,8);
+});
+test('a player may pick a die style which is carried by roll events without changing the roll',()=>{
+ let s=createRoom('112233','a','A',now);addPlayer(s,'a','A');addPlayer(s,'b','B');
+ s=run(s,{type:'start'});
+ s=run(s,{type:'cosmetic',skin:'fairy-2',dieStyle:'frost'});
+ assert.throws(()=>run(s,{type:'cosmetic',skin:'fairy-2'},'b'));
+ assert.throws(()=>run(s,{type:'cosmetic',dieStyle:'bad'}));
+ assert.equal(s.players[0].color,'#59d7f3');
+ s=fixture();s.players[0].dieStyle='frost';
+ s=run(s,{type:'roll',troops:1,money:0},'a',()=>.5);
+ assert.equal(s.roll.dieStyle,'frost');assert.equal(s.roll.value,-1);assert.equal(s.roll.lostTroops,1);
+});

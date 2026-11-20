@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import * as rules from '../public/rules.js';
-import {THEMES,GENERALS} from '../public/cosmetics.js';
+import {THEMES,GENERALS,DICE_STYLES,generalById,teamColor} from '../public/cosmetics.js';
+import {FX_DURATION,powerNotice} from '../public/battle-fx.js';
 import {act} from '../engine.mjs';
 const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
 const source=(await readFile(new URL('../public/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
 // A strict DOM harness: getElementById never accepts CSS selectors, matching browsers.
 function client(){
  const nodes=new Map(),history=[],timers=new Map();let timerId=0,backend;
- function element(id){const hidden=new Set();return {id,style:{},dataset:{},disabled:false,value:id==='bet-troops'?'3':'0',max:'',open:false,clientWidth:760,
+ function element(id){const hidden=new Set();return {id,style:{setProperty(){}},dataset:{},disabled:false,value:id==='bet-troops'?'3':'0',max:'',open:false,clientWidth:760,
   classList:{toggle(k,on){if(on===undefined)on=!hidden.has(k);on?hidden.add(k):hidden.delete(k);},add(k){hidden.add(k);},remove(k){hidden.delete(k);},contains:k=>hidden.has(k)},
   set innerHTML(v){this.html=v;for(const match of v.matchAll(/id="([^"]+)"/g))if(!nodes.has(match[1]))nodes.set(match[1],element(match[1]));},get innerHTML(){return this.html||'';},
   set textContent(v){this.text=v;if(id==='reel-title')history.push(v);},get textContent(){return this.text||'';},
@@ -18,7 +19,7 @@ function client(){
  for(const m of html.matchAll(/id="([^"]+)"/g))nodes.set(m[1],element(m[1]));
  const selectors={'#target-hint span':element('hint-text'),'#countdown strong':element('count-number'),'.reel-window':element('reel-window'),'.needle':element('needle')};
  const document={getElementById:id=>nodes.get(id)||null,querySelector:q=>selectors[q]||null,querySelectorAll:()=>[],createElement:()=>element('new'),body:element('body')};
- const context={...rules,THEMES,GENERALS,document,console,Date,Math,Promise,AbortSignal,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},localStorage:{getItem:()=> 'off',setItem(){}},location:{reload(){}},navigator:{},
+ const context={...rules,THEMES,GENERALS,DICE_STYLES,generalById,teamColor,FX_DURATION,powerNotice,startDice:()=>()=>{},document,console,Date,Math,Promise,AbortSignal,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},localStorage:{getItem:()=> 'off',setItem(){}},location:{reload(){}},navigator:{},
   Board:class{reduced=false;setState(){}effect(){}focus(){}fit(){}zoomBy(){}},
   setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>0,clearInterval(){},
   fetch:async(url,options)=>{try{backend=act(backend,'a',JSON.parse(options.body));return {ok:true,json:async()=>({id:'a',state:backend})};}catch(e){return {ok:false,status:400,json:async()=>({error:e.message})};}}
