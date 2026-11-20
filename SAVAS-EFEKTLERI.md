@@ -1,14 +1,14 @@
-# Ada Muhafızları | Savaş efektleri ve zar
+# Kare Oyunu | Savaş efektleri ve zar
 
 20 Kasım 2026
 
 Şans çarkı sabit merkez göstergeli kayan kart şeridi kullanır. Sonuç sunucuda belirlenir. Yönetici kurulumu YONETICI-TESTI.md dosyasında anlatılıyor.
 
-General paleti takım karolarına, başlıklara, portrelere ve çekilme efektine uygulanır. Altı generalden her biri bir maçta bir takım tarafından seçilebilir. Normal askerlerin taşınan kalkanı, mızrağı ve zırhı aynıdır. KayKit görselleri Canvas üzerinde 2D olarak çizilir. Sprite'ların el ve silah hareketi iskelet üzerinden yeniden yapılmadı.
+General paleti takım karolarına, başlıklara, portrelere ve çekilme efektine uygulanır. Altı generalden her biri bir maçta bir takım tarafından seçilebilir. Normal birlikler aynı zırhlı mızrakçıyı kullanır. Sorguç, kalkan ve kumaş oyuncunun rengine boyanır. KayKit görselleri Canvas üzerinde 2D olarak çizilir. Sprite'ların el ve silah hareketi iskelet üzerinden yeniden yapılmadı.
 
 Güç efektleri sunucu olaylarına bağlanır. Işın kapısı sahnesinde görünen formasyonun konumu görsel olarak taşınır. Zehir yalnızca motorun kaldırdığı kareleri yakar. Füze düşüşü ve çarpması ayrı ses/efekt zamanlarına sahiptir. Ekran bildirimleri kaynak ve hedef oyuncuyu ya da etkisini gösterir. Elf, peri ve füze kaynaklı düşüşlerde farklı darbe efektleri kullanılır. Ses düğmesi örnekleri ve mevcut sentez seslerini kapatır.
 
-ScrollCraft'ın derinlik ve zamanlama yaklaşımı olay bazlı uygulandı. Tahta, hareketli birlikler, parçacıklar ve okunabilir sonuç yazısı ayrı katmanlardır. ScrollCraft bir sayfa kaydırma aracıdır. Oyun içi kamera ve girişler için mevcut Canvas kullanılır.
+Ana menü sahnesinde yerel ScrollCraft motoru manzarayı ve karakterleri ayrı hareket ettirir. Maç içindeki efektler sunucu olaylarıyla başlar. Tahta, hareketli birlikler, parçacıklar ve okunabilir sonuç yazısı ayrı katmanlardır. ScrollCraft bir sayfa kaydırma aracıdır. Oyun içi kamera ve girişler için mevcut Canvas kullanılır.
 
 ## Varlıklar
 
@@ -23,7 +23,7 @@ ScrollCraft'ın derinlik ve zamanlama yaklaşımı olay bazlı uygulandı. Tahta
   - charge.ogg → Mecha TURN ON - OFF 1.wav
   - step.ogg → Mecha LASER BEAM SHORT 1.wav
 - Masaüstündeki Textures paketi LotPixel ahşap PBR dosyaları içeriyor. Ceviz stilinin damarı Canvas'ta üretildi. Kaynak doku web dağıtımında servis edilmez. https://www.lotpixel.com/terms_conditions
-- Masaüstündeki glitch-game-background paketi statik JPG/AI/EPS içeriyor. Sonuç metnindeki renk ayrışması ve kısa giriş hareketi CSS ile üretildi. Kaynak Freepik afişi dağıtım paketine konmadı.
+- Masaüstündeki glitch-game-background paketi statik JPG/AI/EPS içeriyor. Kaynak Freepik afişi dağıtım paketine konmadı. Yeni çark sonucu renkli, kısa bir damga animasyonu kullanır.
 
 ## Kurulum
 

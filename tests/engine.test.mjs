@@ -1,3 +1,4 @@
+import {configureTestMatch} from '../engine.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRoom,addPlayer,act,tick,current,botStep} from '../engine.mjs';
@@ -94,4 +95,23 @@ test('only trusted roll options override the result and still apply normal bet v
  assert.equal(ignored.roll.value,-1);assert.equal(ignored.roll.test,false);
  s=act(s,'a',{type:'roll',troops:2,money:0},{now:now+6000,rng:()=>.5,forcedRoll:10});
  assert.equal(s.roll.value,10);assert.equal(s.roll.test,true);assert.equal(s.players[0].pending,20);
+});
+test('quick placement spends reform first, reports the exact count and preserves disconnected pieces',()=>{
+ const s=fixture();s.board={'10,10':{owner:'a',hp:10},'40,40':{owner:'a',hp:0},'20,20':{owner:'b',hp:10}};
+ s.players[0].pending=4;s.players[0].reform=2;
+ const out=run(s,{type:'auto-place'});assert.equal(units(out,'a').length,8);assert.equal(connected(out,'a').size,7);
+ assert.equal(out.players[0].pending+out.players[0].reform,0);assert.equal(out.events.at(-1).count,6);
+ assert.equal(units(s,'a').length,2);assert.equal(out.board['20,20'].hp,10);
+ s.players[0].pending=101;const capped=run(s,{type:'auto-place'});assert.equal(capped.events.at(-1).count,100);
+ assert.equal(capped.players[0].pending,3);assert.equal(capped.players[0].reform,0);
+});
+
+test('admin can toggle specific effects and rearm a settled roll without changing ownership',()=>{
+ const s=fixture();s.players[0].rolled=true;
+ const actAdmin=options=>configureTestMatch(s,{player:'a',...options},now+7000);
+ assert.equal(actAdmin({type:'effect',effect:'shield',enabled:true}).players[0].shield,true);
+ assert.throws(()=>actAdmin({type:'effect',effect:'money',enabled:true}));
+ assert.equal(actAdmin({type:'rearm'}).players[0].rolled,false);
+ assert.equal(s.players[0].rolled,true);
+ s.players[0].lossRemaining=1;assert.throws(()=>actAdmin({type:'rearm'}));
 });

@@ -1,5 +1,5 @@
 export const SIZE=50;
-export const REEL_DURATION_MS=5000;
+export const REEL_DURATION_MS=1900;
 export const ROLL_REVEAL_MS=REEL_DURATION_MS;
 export const multiplierLabel=value=>(value<0?'−':'+')+Math.abs(value);
 export const ODDS=[{v:1,w:4500},{v:-1,w:3500},{v:2,w:750},{v:-2,w:750},{v:5,w:200},{v:-5,w:200},{v:10,w:100}];

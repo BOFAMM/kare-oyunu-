@@ -4,3 +4,19 @@ Source: https://opengameart.org/content/y2k-lava-texture
 Download: https://opengameart.org/sites/default/files/y2k_lava_texture.png
 Retrieved: 2026-11-14. Original PNG; rendered with opacity/motion in game.
 Character atlases, weapon renders, sound effects and their sources are listed in the game package file SAVAS-EFEKTLERI.md.
+
+Menu and arena art (20 November 2026)
+citadel.webp, meadow.webp, guard.webp — generated with ImageGen for Kare Oyunu, encoded as WebP locally. The guard cloth and shield are tinted on Canvas using the selected general’s color.
+crown.png — cropped from the supplied Desktop/UIBundleFree/UIBundleFree/freecasinoui.png atlas.
+sun-rune.png and moon-rune.png — cropped from freefantasy.png in the same bundle.
+ruby.png — cropped from FreeUI.png in the same bundle. The supplied atlas folder contains no separate license document.
+crest.svg and sigils.svg — original interface marks drawn for Kare Oyunu.
+ScrollCraft menu engine — local scroll-craft/engine/scrollcraft.js, copied unchanged to public/scrollcraft.js. SHA-256 4A419B3EDE51F64790AF7B56C0195EA01C98A84DF8E0E768EBF343956B922F39.
+
+frame.png — nine-slice frame cropped from the supplied Desktop/UIBundleFree/UIBundleFree/MediavelFree.png atlas.
+ember.webp, jade.webp and amethyst.webp — cropped and encoded from Desktop/PNG/shiny/4.png, 2.png and 10.png respectively.
+timber.webp, hide.webp, steel.webp and sapphire.webp — cropped and encoded from Desktop/PNG/simple/5.png, 12.png, 3.png and 7.png respectively. Separate publication terms for the supplied PNG collection have not been verified.
+ranger.webp and sprite.webp — ten-frame idle strips derived from the game's existing CraftPix elf and fairy character atlases.
+Erica One Regular and Outfit Regular/Bold — locally supplied canvas-design/canvas-fonts copies. Font notices are included as public/assets/arena/EricaOne-OFL.txt and Outfit-OFL.txt.
+
+ocean.webp — overhead painterly sea generated for Kare Oyunu with ImageGen. The removable world pack credits are included inside public/worlds/KURULUM.md when installed.

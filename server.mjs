@@ -1,6 +1,6 @@
 import http from 'node:http';
 import {createHash,randomBytes,randomInt,timingSafeEqual} from 'node:crypto';
-import {readFile,writeFile,rename,mkdir} from 'node:fs/promises';
+import {readFile,writeFile,rename,mkdir,access} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {createRoom,addPlayer,act,tick,botStep,current,configureTestMatch} from './engine.mjs';
@@ -10,23 +10,23 @@ const random=()=>randomInt(0,1000000000)/1000000000;
 const adminKey=process.env.GAME_ADMIN_KEY?.trim();
 const digest=value=>createHash('sha256').update(value).digest();
 const adminDigest=/^[a-f0-9]{64}$/i.test(adminKey||'')?digest(adminKey):null;
-const queuedRolls=new Map();
+const queuedRolls=new Map(), checkpoints=new Map();
 function acceptedRoll(before,after){
  const roll=after.roll;
  if(roll?.test&&roll.id!==before.roll?.id)queuedRolls.get(after.code)?.delete(roll.player);
 }
 function adminRooms(){
  return {rooms:[...rooms.values()].map(s=>({
-  code:s.code,stage:s.stage,round:s.round,current:current(s)?.id,
+  checkpoint:checkpoints.has(s.code),code:s.code,stage:s.stage,round:s.round,current:current(s)?.id,
   players:s.players.map(p=>{
    const army=units(s,p.id);
    return {id:p.id,name:p.name,bot:p.bot,eliminated:p.eliminated,tiles:army.length,
-    money:p.money,pending:p.pending,hp:army.filter(([,u])=>u.hp).map(([,u])=>u.hp),
+    effects:{shield:!!p.shield,double:!!p.double,lucky:!!p.lucky},money:p.money,pending:p.pending,position:army.find(([,u])=>u.hp)?.[0]||army[0]?.[0],hp:army.filter(([,u])=>u.hp).map(([,u])=>u.hp),
     queued:queuedRolls.get(s.code)?.get(p.id)??null};
   })
  }))};
 }
-const dataDir=path.join(root,'.data');let dirty=false,saving=false;
+const dataDir=path.join(root,process.env.KARE_OWNER_LAB==='1'?'.owner-lab':'.data');let dirty=false,saving=false;
 await mkdir(dataDir,{recursive:true});
 try{const data=JSON.parse(await readFile(path.join(dataDir,'rooms.json'),'utf8'));for(const [k,v]of data.rooms)rooms.set(k,v);for(const [k,v]of data.sessions)sessions.set(k,v);}catch(e){if(e.code!=='ENOENT'){console.error('Kayıt okunamadı; dosyayı korumak için sunucu durdu.',e.message);process.exit(1);}}
 async function save(){if(!dirty||saving)return;saving=true;dirty=false;try{await writeFile(path.join(dataDir,'rooms.tmp'),JSON.stringify({rooms:[...rooms],sessions:[...sessions]}));await rename(path.join(dataDir,'rooms.tmp'),path.join(dataDir,'rooms.json'));}catch(e){dirty=true;console.error('Kayıt yazılamadı:',e.message);}finally{saving=false;}}
@@ -48,7 +48,24 @@ export const server=http.createServer(async(req,res)=>{try{
    const a=await body(req);
    const s=rooms.get(a?.room);
    if(!s)return reply(res,404,{error:'Oda bulunamadı.'});
-   if(a.type==='queue'){
+   if(a.type==='snapshot'){
+    if(s.stage!=='playing')throw Error('Kontrol noktası için maçı başlat.');
+    checkpoints.set(s.code,{state:structuredClone(s),rolls:new Map(queuedRolls.get(s.code)),at:Date.now()});
+   }else if(a.type==='simulate'){
+    const move=a.move;
+    if(s.stage!=='playing'||!['power','place','dismiss','heal','general','buy','recruit','convert','auto-place','auto-dismiss','roll','end'].includes(move?.type))throw Error('Geçersiz test hamlesi.');
+    const after=act(s,a.player,move,{now:Date.now(),rng:random,forcedRoll:queuedRolls.get(s.code)?.get(a.player)});
+    acceptedRoll(s,after);after.logs.unshift('Yönetici panelinden test hamlesi uygulandı.');
+    rooms.set(s.code,after);dirty=true;
+   }else if(a.type==='restore'){
+    const saved=checkpoints.get(s.code);
+    if(!saved||s.players.map(p=>p.id).join()!==saved.state.players.map(p=>p.id).join())throw Error('Uygun kontrol noktası bulunamadı.');
+    const restored=structuredClone(saved.state),now=Date.now();
+    restored.deadline=now+Math.max(1000,restored.deadline-saved.at);
+    restored.revealUntil=0;restored.updated=now;restored.seq=Math.max(restored.seq,s.seq);
+    restored.events=[];restored.logs.unshift('Yönetici test kontrol noktasına döndü.');
+    rooms.set(s.code,restored);queuedRolls.set(s.code,new Map(saved.rolls));dirty=true;
+   }else if(a.type==='queue'){
     const p=s.players.find(p=>p.id===a.player&&!p.eliminated);
     if(!p||s.stage!=='playing')throw Error('Oynayan bir oyuncu seç.');
     if(a.result!==null&&!ODDS.some(o=>o.v===a.result))throw Error('Geçersiz çark sonucu.');
@@ -84,9 +101,20 @@ export const server=http.createServer(async(req,res)=>{try{
   }return reply(res,404,{error:'İşlem bulunamadı.'});
  }
  if(!['GET','HEAD'].includes(req.method))return reply(res,405,{error:'Yöntem desteklenmiyor.'});
+ if(url.pathname.startsWith('/worlds/')){
+  const file=url.pathname.slice(8);
+  if(!/^(worlds\.js|worlds\.css|(?:volcanic|technology|fantasy|forest|ice|desert|space|actors|materials)\.webp)$/.test(file))return reply(res,404,{error:'Dosya bulunamadı.'});
+  try{const content=await readFile(path.join(root,'public','worlds',file));res.writeHead(200,{'Content-Type':file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':'image/webp','X-Content-Type-Options':'nosniff'});return res.end(req.method==='HEAD'?undefined:content);}
+  catch(e){if(e.code==='ENOENT')return reply(res,404,{error:'Yama kurulu değil.'});throw e;}
+ }
  const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/rules.js':'rules.js','/board.js':'board.js','/cosmetics.js':'cosmetics.js','/assets/lava.png':'assets/lava.png'};
- const characterPath=/^\/assets\/characters\/(elf|fairy)-[1-3]\/(idle|walk|attack|hurt|die|portrait)\.png$/.test(url.pathname);const battlePath=/^\/assets\/battle\/(?:(?:bow|sword|staff|wand|shield|spear)\.png|(?:impact|launch|beam|lock|charge|step)\.ogg)$/.test(url.pathname);const modulePath=['/sprites.js','/admin.js','/battle-fx.js'].includes(url.pathname);const name=modulePath||battlePath?url.pathname.slice(1):characterPath?url.pathname.slice(1):files[url.pathname];if(!name)return reply(res,404,{error:'Dosya bulunamadı.'});const content=await readFile(path.join(root,'public',name));res.writeHead(200,{'Content-Type':name.endsWith('.png')?'image/png':name.endsWith('.ogg')?'audio/ogg':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self'; frame-ancestors 'none'; base-uri 'none'"});res.end(req.method==='HEAD'?undefined:content);
+ const characterPath=/^\/assets\/characters\/(elf|fairy)-[1-3]\/(idle|walk|attack|hurt|die|portrait)\.png$/.test(url.pathname);const battlePath=/^\/assets\/battle\/(?:(?:bow|sword|staff|wand|shield|spear)\.png|(?:impact|launch|beam|lock|charge|step)\.ogg)$/.test(url.pathname);const arenaFile=['ocean.webp','citadel.webp','meadow.webp','guard.webp','crest.svg','sigils.svg','crown.png','sun-rune.png','moon-rune.png','ruby.png','ember.webp','jade.webp','amethyst.webp','timber.webp','hide.webp','steel.webp','sapphire.webp','ranger.webp','sprite.webp','frame.png','EricaOne-Regular.ttf','Outfit-Regular.ttf','Outfit-Bold.ttf'].some(file=>url.pathname==='/assets/arena/'+file);const modulePath=['/scrollcraft.js','/arena.js','/sprites.js','/admin.js','/battle-fx.js'].includes(url.pathname);const name=modulePath||battlePath||arenaFile?url.pathname.slice(1):characterPath?url.pathname.slice(1):files[url.pathname];if(!name)return reply(res,404,{error:'Dosya bulunamadı.'});let content=await readFile(path.join(root,'public',name));
+ if(name==='index.html'){
+  try{await access(path.join(root,'public/worlds/worlds.js'));content=content.toString().replace('</head>','<link rel="stylesheet" href="/worlds/worlds.css"><script type="module" src="/worlds/worlds.js"></script></head>');}
+  catch(e){if(e.code!=='ENOENT')throw e;}
+ }
+ res.writeHead(200,{'Content-Type':name.endsWith('.ttf')?'font/ttf':name.endsWith('.svg')?'image/svg+xml':name.endsWith('.webp')?'image/webp':name.endsWith('.png')?'image/png':name.endsWith('.ogg')?'audio/ogg':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self'; frame-ancestors 'none'; base-uri 'none'"});res.end(req.method==='HEAD'?undefined:content);
  }catch(e){reply(res,400,{error:e.message||'İşlem tamamlanamadı.'});}});
-const timer=setInterval(()=>{const now=Date.now();for(const [code,original]of rooms){try{let s=tick(original,now,random);const host=s.players.find(p=>p.id===s.host);if(host&&!host.bot&&now-(lastSeen.get(host.id)||s.created)>30000){const next=s.players.find(p=>!p.bot&&now-(lastSeen.get(p.id)||0)<5000);if(next&&next.id!==s.host){s=structuredClone(s);s.host=next.id;dirty=true;}}if(current(s)?.bot){const before=s;s=botStep(s,now,random,queuedRolls.get(code)?.get(current(s).id));acceptedRoll(before,s);}if(s!==original){rooms.set(code,s);dirty=true;}}catch(e){console.error('Oda işlemi başarısız:',code,e.message);}}void save();},600);
-const port=Number(process.env.PORT||3000);server.listen(port,'0.0.0.0',()=>console.log(`Ada Muhafızları hazır: http://localhost:${port}`));
+const timer=setInterval(()=>{const now=Date.now();for(const [code,original]of rooms){try{let s=tick(original,now,random);const host=s.players.find(p=>p.id===s.host);if(host&&!host.bot&&now-(lastSeen.get(host.id)||s.created)>30000){const next=s.players.find(p=>!p.bot&&now-(lastSeen.get(p.id)||0)<5000);if(next&&next.id!==s.host){s=structuredClone(s);s.host=next.id;dirty=true;}}if(current(s)?.bot){const before=s;s=botStep(s,now,random,queuedRolls.get(code)?.get(current(s).id));acceptedRoll(before,s);}if(s!==original){rooms.set(code,s);dirty=true;}}catch(e){console.error('Oda işlemi başarısız:',code,e.message);}}void save();},360);
+const port=Number(process.env.PORT||3000);server.listen(port,process.env.HOST||'0.0.0.0',()=>console.log(`Kare Oyunu hazır: http://localhost:${port}`));
 async function shutdown(){clearInterval(timer);await save();server.close(()=>process.exit(0));}process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);
