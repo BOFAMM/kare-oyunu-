@@ -38,6 +38,7 @@ export function installAdmin(currentRoom){
  };
  function unlocked(){
   el('login').hidden=Boolean(key);el('controls').hidden=!key;
+  el('open').hidden=!key && location.hash!=='#komutan-girisi';
   el('guide').open=!key;
  }
  async function request(data,success){
@@ -123,5 +124,6 @@ export function installAdmin(currentRoom){
  document.addEventListener('keydown',event=>{
   if(event.ctrlKey&&event.shiftKey&&event.code==='KeyK'){event.preventDefault();open();}
  });
- if(new URLSearchParams(location.search).has('test'))open();
+ window.addEventListener('hashchange',unlocked);
+ unlocked();
 }
