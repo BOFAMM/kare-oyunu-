@@ -14,7 +14,7 @@ Render servisinde **Environment → Add Environment Variable** seç. Ad olarak `
 
 Yerel PowerShell oturumunda aynı ayar `$env:GAME_ADMIN_KEY = 'ANAHTARINI_BURAYA_GIR'` şeklinde yapılır. Sonra o terminalden `node server.mjs` çalıştırılır. Yeni değer için sunucu yeniden başlatılır.
 
-Ana menüde veya maçın üst çubuğunda **Yönetici** düğmesini aç. Alternatif olarak oyun adresinin sonuna `?test=1` ekle veya oyun açıkken **Ctrl+Shift+K** tuşlarına bas. HTTPS yayımlanan oyunda, HTTP ise yerel bilgisayarda kullanılabilir. Anahtarı panelde gir. Girişten sonra üstteki **Test paneli** düğmesiyle oyunu kapatmadan panele geri dön. Anahtar yalnızca açık sekmenin belleğindedir. Yenileme veya yönetici çıkışı yeniden giriş gerektirir.
+Gizli giriş düğmesini görmek için oyun adresinin sonuna `#komutan-girisi` ekle veya oyun açıkken **Ctrl+Shift+K** tuşlarına bas. HTTPS yayımlanan oyunda, HTTP ise yerel bilgisayarda kullanılabilir. Anahtarı panelde gir. Girişten sonra üstteki **Test paneli** düğmesiyle oyunu kapatmadan panele geri dön. Anahtar yalnızca açık sekmenin belleğindedir. Yenileme veya yönetici çıkışı yeniden giriş gerektirir.
 
 ## Hızlı test
 

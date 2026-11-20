@@ -20,3 +20,5 @@ ranger.webp and sprite.webp — ten-frame idle strips derived from the game's ex
 Erica One Regular and Outfit Regular/Bold — locally supplied canvas-design/canvas-fonts copies. Font notices are included as public/assets/arena/EricaOne-OFL.txt and Outfit-OFL.txt.
 
 ocean.webp — overhead painterly sea generated for Kare Oyunu with ImageGen. The removable world pack credits are included inside public/worlds/KURULUM.md when installed.
+
+guide-hand.webp — wristband hand cropped from supplied Desktop/Screenshot_5.png. External publication rights not verified.
