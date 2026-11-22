@@ -5,20 +5,24 @@ import {SIZE,COLORS,project,unproject,xy,key,units,adjacent,inside,dismissalPlan
 // Draw in board coordinates so panning, zoom and hit testing share one boundary.
 function siegeBoundary(c,zone,t){
  if(!zone?.war)return;
- function ring(n){
-  const lo=n-.5,hi=SIZE-.5-n;
-  [[lo,lo],[hi,lo],[hi,hi],[lo,hi]].forEach(([x,y],i)=>{
+ const full={left:0,top:0,right:SIZE-1,bottom:SIZE-1};
+ const n=zone.inset||0;
+ const safe=zone.bounds||{left:n,top:n,right:SIZE-1-n,bottom:SIZE-1-n};
+ const open=safe.left<=safe.right&&safe.top<=safe.bottom;
+ function ring({left,right,top,bottom}){
+  const l=left-.5,r=right+.5,u=top-.5,b=bottom+.5;
+  [[l,u],[r,u],[r,b],[l,b]].forEach(([x,y],i)=>{
    const p=project(x,y);if(i)c.lineTo(p.x,p.y);else c.moveTo(p.x,p.y);
   });c.closePath();
  }
- c.save();c.beginPath();ring(0);if(zone.inset<SIZE/2)ring(zone.inset);
+ c.save();c.beginPath();ring(full);if(open)ring(safe);
  c.clip('evenodd');c.fillStyle='rgba(205,31,68,.20)';c.fillRect(-1300,-20,2600,1660);
  const glow=c.createLinearGradient(0,0,80,190);
  glow.addColorStop(0,'transparent');glow.addColorStop(.5,'rgba(255,84,99,.14)');glow.addColorStop(1,'transparent');
  c.translate(0,(t/30)%190-190);
  for(let i=-1;i<10;i++){c.fillStyle=glow;c.fillRect(-1300,0,2600,190);c.translate(0,190);}
- c.restore();if(zone.inset>=SIZE/2)return;
- c.save();c.beginPath();ring(zone.inset);c.lineJoin='round';c.strokeStyle='#ff245b';c.shadowColor='#ff244f';c.shadowBlur=11;c.lineWidth=6;c.stroke();
+ c.restore();if(!open)return;
+ c.save();c.beginPath();ring(safe);c.lineJoin='round';c.strokeStyle='#ff245b';c.shadowColor='#ff244f';c.shadowBlur=11;c.lineWidth=6;c.stroke();
  c.shadowBlur=0;c.strokeStyle='#fff5df';c.lineWidth=2;c.setLineDash([40,9]);c.lineDashOffset=-t/35;c.stroke();c.restore();
 }
 const guardSkins=new Map();

@@ -21,7 +21,7 @@ export function installAdmin(currentRoom){
   const siege=r?.mode==='siege',cards=siege?SIEGE_POWERS:POWERS;
   fill(el('power'),[['','Güç eklenmesin'],...cards.map(c=>[String(c.id),c.name])],el('power').value);
   fill(el('card'),cards.map(c=>[String(c.id),c.name]),el('card').value);
-  fill(el('move'),siege?[...moves.filter(([id])=>!['roll','end','dismiss','auto-dismiss','convert'].includes(id)),['haste','Üretimi hızlandır']]:moves,el('move').value);
+  fill(el('move'),siege?moves.filter(([id])=>!['roll','end','dismiss','auto-dismiss','convert'].includes(id)):moves,el('move').value);
   fields();
   for(const id of ['queue','random','rearm','turn','effect-on','effect-off','roll','queued'])el(id).hidden=siege;
   el('position').textContent=p?.position?'Ordunun referans karesi (X, Y) · '+p.position:'';

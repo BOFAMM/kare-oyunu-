@@ -3,7 +3,7 @@ import {createHash,randomBytes,randomInt,timingSafeEqual} from 'node:crypto';
 import {readFile,writeFile,rename,mkdir,access} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
-import {createRoom,addPlayer,act,tick,botStep,current,configureTestMatch} from './engine.mjs';
+import {createRoom,addPlayer,act,tick,botStep,current,migrateSiegeRoom,configureTestMatch} from './engine.mjs';
 import {ODDS,units} from './public/rules.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), rooms=new Map(), sessions=new Map();
 const random=()=>randomInt(0,1000000000)/1000000000;
@@ -32,7 +32,7 @@ function adminRooms(){
 }
 const dataDir=path.join(root,process.env.KARE_OWNER_LAB==='1'?'.owner-lab':'.data');let dirty=false,saving=false;
 await mkdir(dataDir,{recursive:true});
-try{const data=JSON.parse(await readFile(path.join(dataDir,'rooms.json'),'utf8'));for(const [k,v]of data.rooms)rooms.set(k,v);for(const [k,v]of data.sessions)sessions.set(k,v);}catch(e){if(e.code!=='ENOENT'){console.error('Kayıt okunamadı; dosyayı korumak için sunucu durdu.',e.message);process.exit(1);}}
+try{const data=JSON.parse(await readFile(path.join(dataDir,'rooms.json'),'utf8'));for(const [k,v]of data.rooms)rooms.set(k,migrateSiegeRoom(v));for(const [k,v]of data.sessions)sessions.set(k,v);}catch(e){if(e.code!=='ENOENT'){console.error('Kayıt okunamadı; dosyayı korumak için sunucu durdu.',e.message);process.exit(1);}}
 async function save(){if(!dirty||saving)return;saving=true;dirty=false;try{await writeFile(path.join(dataDir,'rooms.tmp'),JSON.stringify({rooms:[...rooms],sessions:[...sessions]}));await rename(path.join(dataDir,'rooms.tmp'),path.join(dataDir,'rooms.json'));}catch(e){dirty=true;console.error('Kayıt yazılamadı:',e.message);}finally{saving=false;}}
 function view(s,id){const copy=structuredClone(s);for(const p of copy.players)if(p.id!==id){p.offers=[];if(s.mode==='siege')p.inventory={};}return copy;}
 function reply(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
@@ -57,7 +57,7 @@ export const server=http.createServer(async(req,res)=>{try{
     checkpoints.set(s.code,{state:structuredClone(s),rolls:new Map(queuedRolls.get(s.code)),at:Date.now()});
    }else if(a.type==='simulate'){
     const move=a.move;
-    if(s.stage!=='playing'||!['power','place','dismiss','heal','general','buy','recruit','convert','auto-place','auto-dismiss','roll','end','haste'].includes(move?.type))throw Error('Geçersiz test hamlesi.');
+    if(s.stage!=='playing'||!['power','place','dismiss','heal','general','buy','recruit','convert','auto-place','auto-dismiss','roll','end'].includes(move?.type))throw Error('Geçersiz test hamlesi.');
     if(s.mode==='siege'&&move.type==='place')move.expectedOwner=s.board[move.x+','+move.y]?.owner??null;
     const after=act(s,a.player,move,{now:Date.now(),rng:random,forcedRoll:queuedRolls.get(s.code)?.get(a.player)});
     acceptedRoll(s,after);after.logs.unshift('Yönetici panelinden test hamlesi uygulandı.');
@@ -119,7 +119,7 @@ export const server=http.createServer(async(req,res)=>{try{
   catch(e){if(e.code==='ENOENT')return reply(res,404,{error:'Yama kurulu değil.'});throw e;}
  }
  const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/rules.js':'rules.js','/board.js':'board.js','/cosmetics.js':'cosmetics.js','/assets/lava.png':'assets/lava.png'};
- const characterPath=/^\/assets\/characters\/(elf|fairy)-[1-3]\/(idle|walk|attack|hurt|die|portrait)\.png$/.test(url.pathname);const battlePath=/^\/assets\/battle\/(?:(?:bow|sword|staff|wand|shield|spear)\.png|(?:impact|launch|beam|lock|charge|step)\.ogg)$/.test(url.pathname);const arenaFile=['guide-hand.webp','ocean.webp','citadel.webp','meadow.webp','guard.webp','crest.svg','sigils.svg','crown.png','sun-rune.png','moon-rune.png','ruby.png','ember.webp','jade.webp','amethyst.webp','timber.webp','hide.webp','steel.webp','sapphire.webp','ranger.webp','sprite.webp','frame.png','EricaOne-Regular.ttf','Outfit-Regular.ttf','Outfit-Bold.ttf'].some(file=>url.pathname==='/assets/arena/'+file);const modulePath=['/siege-ui.js','/siege-ui.css','/siege-rules.js','/guide.js','/scrollcraft.js','/arena.js','/sprites.js','/admin.js','/battle-fx.js'].includes(url.pathname);const siegeArt=/^\/assets\/siege\/[a-z0-9-]+\.(?:svg|webp|png)$/.test(url.pathname);const name=siegeArt||modulePath||battlePath||arenaFile?url.pathname.slice(1):characterPath?url.pathname.slice(1):files[url.pathname];if(!name)return reply(res,404,{error:'Dosya bulunamadı.'});let content=await readFile(path.join(root,'public',name));
+ const characterPath=/^\/assets\/characters\/(elf|fairy)-[1-3]\/(idle|walk|attack|hurt|die|portrait)\.png$/.test(url.pathname);const battlePath=/^\/assets\/battle\/(?:(?:bow|sword|staff|wand|shield|spear)\.png|(?:impact|launch|beam|lock|charge|step)\.ogg)$/.test(url.pathname);const arenaFile=['guide-hand.webp','ocean.webp','citadel.webp','meadow.webp','guard.webp','crest.svg','sigils.svg','crown.png','sun-rune.png','moon-rune.png','ruby.png','ember.webp','jade.webp','amethyst.webp','timber.webp','hide.webp','steel.webp','sapphire.webp','ranger.webp','sprite.webp','frame.png','EricaOne-Regular.ttf','Outfit-Regular.ttf','Outfit-Bold.ttf'].some(file=>url.pathname==='/assets/arena/'+file);const modulePath=['/siege-ui.js','/siege-ui.css','/siege-rules.js','/touch-values.js','/guide.js','/scrollcraft.js','/arena.js','/sprites.js','/admin.js','/battle-fx.js'].includes(url.pathname);const siegeArt=/^\/assets\/siege\/[a-z0-9-]+\.(?:svg|webp|png)$/.test(url.pathname);const name=siegeArt||modulePath||battlePath||arenaFile?url.pathname.slice(1):characterPath?url.pathname.slice(1):files[url.pathname];if(!name)return reply(res,404,{error:'Dosya bulunamadı.'});let content=await readFile(path.join(root,'public',name));
  if(name==='index.html'){
   try{await access(path.join(root,'public/worlds/worlds.js'));content=content.toString().replace('</head>','<link rel="stylesheet" href="/worlds/worlds.css"><script type="module" src="/worlds/worlds.js"></script></head>');}
   catch(e){if(e.code!=='ENOENT')throw e;}

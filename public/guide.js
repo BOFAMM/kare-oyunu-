@@ -13,11 +13,12 @@ function advice({state:s,p,mine,target,picks,board,animating}){
   if(picks.length<2)return [picks.length?'Bir güç daha seç.':'Üç karttan ilk gücünü seç.','[data-pick][aria-pressed=false]'];
   return ['Seçimini onayla ve arenaya gir.','#confirm-powers'];
  }
+ if(s.mode==='siege'&&stage==='placement')return [p.spawn?(p.ready?'Hazırsın. Diğer ordular bekleniyor.':'Konumunu kontrol et ve Hazırım düğmesine dokun.'):'Ordu başlangıcın için haritadan bir kare seç.'];
  if(s.mode==='siege'&&stage==='playing'){
   if(p.eliminated)return ['Ordun elendi. Mücadeleyi haritadan takip edebilirsin.'];
   if(target)return [$('target-hint').textContent||'Haritada hedefini seç.','#board'];
   if(p.pending||p.reform)return [s.siege?.war?'Savaş başladı. Lazerin içine doğru yerleş veya rakibin dış kenarına saldır.':'Gelişme zamanı. Ordunun kenarındaki boş kareye dokunarak asker yerleştir.','#siege-auto'];
-  return ['Yeni asker hazırlanıyor. Marketi açarak kaynaklarını ve kart seçeneklerini incele.','#siege-market'];
+  return ['25 saniyede 20 dolar gelir. Marketten asker satın al, ardından haritada yerleştir.','#siege-market'];
  }
  if(!mine)return [p.eliminated?'Ordun elendi. Kalan komutanların hamlelerini izleyebilirsin.':'Şimdi rakibin sırası. Sıra sana geçtiğinde ilk hamleni göstereceğim.'];
  if(stage==='placement')return ['Ordun için boş bir 2 × 5 alan seç. İlk kare generalinin yeri.','#board'];

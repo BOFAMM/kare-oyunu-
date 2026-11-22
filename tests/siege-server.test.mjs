@@ -18,7 +18,7 @@ test('two HTTP clients racing for a cell spend one unit, retain the losing order
   let s=createRoom('111111','a','Lâl');addPlayer(s,'a','Lâl');addPlayer(s,'b','Ayaz');
   s.mode='siege';s.order=['a','b'];s.stage='countdown';s.deadline=0;
   s.board={'20,20':{owner:'a',hp:10},'22,20':{owner:'b',hp:10}};
-  s=tick(s,Date.now());
+  s=tick(s,Date.now());for(const p of s.players)p.pending=5;
   await writeFile(path.join(dir,'.data/rooms.json'),JSON.stringify({rooms:[[s.code,s]],sessions:['a','b'].map(id=>[id,{id,code:s.code}])}));
   child=spawn(process.execPath,['server.mjs'],{cwd:dir,env:{...process.env,PORT:'0',HOST:'127.0.0.1',KARE_OWNER_LAB:'0'},windowsHide:true});
   const [out]=await once(child.stdout,'data',{signal:AbortSignal.timeout(5000)});

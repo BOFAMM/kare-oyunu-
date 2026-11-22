@@ -1,14 +1,10 @@
 import {POWERS} from './rules.js';
 
-export const SIEGE=Object.freeze({peaceMs:120000,incomeMs:20000,income:40,troopMs:4000,shrinkMs:15000,hastePrice:600,startMoney:80,startTroops:5});
+export const SIEGE=Object.freeze({peaceMs:180000,countdownMs:10000,incomeMs:25000,income:20,shrinkMs:45000,startMoney:80,startTroops:0});
 const changes={
- 1:{name:'Saha erzağı',desc:'Hemen 4 yerleştirme hakkı al.'},
- 8:{name:'İkmal kesintisi',desc:'Rakibin sıradaki asker üretimini engelle. Depodaki askerler korunur.'},
- 9:{name:'Çifte sevkiyat',desc:'Sonraki dört asker üretiminin her birinde bir ek asker kazan.'},
- 10:{desc:'Haritadaki her generaline 10 can ekle. Yeni generaller ödenen bedel kadar canla başlar.'},
- 11:{name:'Gelir ablukası',hostile:true,target:'player',desc:'Rakibin sıradaki 40 dolarlık ödemesini durdur.'},
- 12:{name:'Zehir maskesi',desc:'Ordun bir sonraki zehir darbesinden korunur. İlk zarar anında tüketilir.'},
- 14:{desc:'Sekiz saniye boyunca rakip saldırı ve güçlerinden korun. Lazer zehrine karşı işlemez.'},
- 15:{desc:'Bağlantıları koruyarak askerleri geri çek. Aldığın dizilim haklarıyla yalnızca boş kareye yerleş.'}
+ 10:{desc:'Haritadaki her generaline 10 can ekle.'},
+ 11:{name:'Gelir ablukası',hostile:true,target:'player',desc:'Rakibin sıradaki 20 dolarlık ödemesini durdur.'},
+ 12:{name:'Zehir maskesi',desc:'Ordun bir sonraki zehir darbesinden korunur.'},
+ 14:{desc:'Sekiz saniye boyunca rakip saldırı ve güçlerinden korun.'}
 };
-export const SIEGE_POWERS=POWERS.map(card=>({...card,...changes[card.id]}));
+export const SIEGE_POWERS=POWERS.filter(c=>[4,5,7,10,11,12,14].includes(c.id)).map(c=>({...c,...changes[c.id]}));
