@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-20T10:14:04.481328+00:00",
+  "title": "Kare Oyunu tasarım sistemi",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "panel",
+        "value": "0 8px 18px #10171b62",
+        "purpose": "Oyun yüzeyini tahtadan ayırır"
+      }
+    ],
+    "motion": [
+      {
+        "name": "olay-girisi",
+        "value": "260ms ease-out",
+        "purpose": "Hamlenin adını ve miktarını gösterir"
+      },
+      {
+        "name": "cark",
+        "value": "1900ms",
+        "purpose": "Sonuç kartını merkez işaretçisine taşır"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "telefon-menusu",
+        "value": "700px"
+      },
+      {
+        "name": "mobil-hamle-paneli",
+        "value": "860px"
+      },
+      {
+        "name": "telefon-kartlari",
+        "value": "640px"
+      }
+    ]
+  },
+  "narrative": {
+    "northStar": "Renkli fantastik arena",
+    "overview": "Kale meydanındaki iki general, taçlı logo ve dokulu oyun komutları ana menüyü oluşturur. Telefonda komutlar başparmak hizasına iner. Tahta üstündeki armalı yazılar her hamlenin sonucunu gösterir."
+  }
+}
