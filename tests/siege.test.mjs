@@ -43,12 +43,12 @@ test('siege attacks preserve defenders bridges; general purchase HP equals price
  s=run(s,'a',{type:'place',x:9,y:10,expectedOwner:null});
  assert.throws(()=>run(s,'a',{type:'heal',amount:1,x:9,y:10}),/general/);
 });
-test('poison grants one ring of grace, kills troops and damages generals by five per pulse',()=>{
+test('poison grants one ring of grace, kills troops and doubles general damage per exposure',()=>{
  let s=fixture();s.board['0,5']={owner:'a',hp:0};s.board['1,5']={owner:'a',hp:0};s.board['0,6']={owner:'a',hp:12};
  s=tick(s,start+180000,rng);assert.equal(s.siege.war,true);assert.equal(s.siege.inset,0);
  s=tick(s,start+225000,rng);assert.ok(s.board['0,5']);assert.equal(s.board['0,6'].hp,12);
- s=tick(s,start+270000,rng);assert.equal(s.board['0,5'],undefined);assert.ok(s.board['1,5']);assert.equal(s.board['0,6'].hp,7);
- s=tick(s,start+315000,rng);assert.equal(s.board['1,5'],undefined);assert.equal(s.board['0,6'].hp,2);
+ s=tick(s,start+270000,rng);assert.ok(s.board['0,5']);assert.ok(s.board['1,5']);assert.equal(s.board['0,6'].hp,7);
+ s=tick(s,start+315000,rng);assert.equal(s.board['1,5'],undefined);assert.equal(s.board['0,6'],undefined);
  assert.throws(()=>run(s,'a',{type:'general',x:0,y:6},315000),/Lazer/);
 });
 test('all seven siege cards can be granted, bought and used with their mode-specific targets',()=>{
@@ -91,11 +91,21 @@ test('final poison cannot be stalled with healing, steel heart or renewable pois
   assert.throws(()=>run(s,'a',move,final),/Güvenli alan kalmadı/);
  s=tick(s,start+final+100*SIEGE.shrinkMs,rng);assert.equal(s.winner,'a');
 });
-test('after poison splits a formation, an isolated soldier cannot expand a disconnected front',()=>{
+test('poison preserves the bridge to a living general and the connected front can expand',()=>{
  let s=fixture();
  s.players[0].pending=2;s.board={'1,9':{owner:'a',hp:0},'0,9':{owner:'a',hp:0},'0,10':{owner:'a',hp:0},'0,11':{owner:'a',hp:0},'1,11':{owner:'a',hp:10},'20,20':{owner:'b',hp:10}};
  s=tick(s,start+270000,rng);
- assert.throws(()=>run(s,'a',{type:'place',x:2,y:9,expectedOwner:null},270000),/bağlı/);
+ assert.ok(s.board['0,10']);s=run(s,'a',{type:'place',x:2,y:9,expectedOwner:null},270000);
  s=run(s,'a',{type:'place',x:2,y:11,expectedOwner:null},270000);
  assert.equal(s.board['2,11'].owner,'a');
+});
+
+test('100 HP general holds a poisoned bridge until lethal fifth strike',()=>{
+ let s=fixture();s.board={'20,20':{owner:'b',hp:10},'0,15':{owner:'a',hp:100}};
+ for(let x=1;x<=12;x++)s.board[x+',15']={owner:'a',hp:0};
+ for(const [i,hp] of [95,85,65,25,0].entries()){
+  s=tick(s,start+270000+i*45000,rng);
+  assert.equal(s.board['0,15']?.hp||0,hp);
+  assert.equal(Boolean(s.board['1,15']),hp>0);
+ }
 });

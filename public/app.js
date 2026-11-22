@@ -25,7 +25,42 @@ const me=()=>state?.players.find(p=>p.id===myId),turn=()=>state?.players.find(p=
 const myTurn=()=>state?.stage==='playing'&&(isSiege()||turn()?.id===myId)&&!me()?.eliminated;
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(text){$('toast').textContent=text;$('toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('toast').classList.remove('show'),3700);}
-function tone(kind='click'){if(kind==='place'){if(Date.now()-lastPlaceSound<90)return;lastPlaceSound=Date.now();}if(!soundOn)return;try{audio??=new (window.AudioContext||window.webkitAudioContext)();if(audio.state==='suspended')void audio.resume();const sounds={block:[95,.3],buff:[1050,.35],click:[520,.04],place:[700,.07],hit:[130,.15],win:[880,.4],lose:[170,.3],tick:[900,.025],power:[440,.25],turn:[650,.16],missile:[80,.65]};const [f,d]=sounds[kind]||sounds.click;const osc=audio.createOscillator(),gain=audio.createGain();osc.connect(gain);gain.connect(audio.destination);osc.type=kind==='missile'?'sawtooth':kind==='place'?'triangle':'sine';osc.frequency.setValueAtTime(f,audio.currentTime);osc.frequency.exponentialRampToValueAtTime(kind==='lose'||kind==='missile'?40:f*1.3,audio.currentTime+d);gain.gain.setValueAtTime(.0001,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.08,audio.currentTime+.005);gain.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+d);osc.start();osc.stop(audio.currentTime+d+.01);}catch{/* Audio is optional when the browser has no AudioContext. */}}
+const buffers=new Map(),voices=new Map();
+let mix;
+function primeAudio(){
+ if(!soundOn||!window.AudioContext&&!window.webkitAudioContext)return;
+ if(!audio){
+  audio=new (window.AudioContext||window.webkitAudioContext)({latencyHint:'interactive'});
+  mix=audio.createDynamicsCompressor();mix.threshold.value=-18;mix.ratio.value=5;mix.connect(audio.destination);
+  for(const name of ['step','lock','impact','charge','beam','launch','chime']){
+   fetch('/assets/battle/'+name+'.ogg').then(r=>r.arrayBuffer()).then(b=>audio.decodeAudioData(b)).then(b=>buffers.set(name,b)).catch(()=>{});
+  }
+ }
+ if(audio.state==='suspended')audio.resume().catch(()=>{});
+}
+document.addEventListener?.('pointerdown',primeAudio,{passive:true});
+document.addEventListener?.('click',e=>{if(e.target.closest?.('.camp button:not(#quick-play):not(#create):not(#join)'))playCue('beam',.13);});
+function playCue(name,level=.28){
+ if(!soundOn||typeof window==='undefined')return;
+ primeAudio();if(!audio||audio.state!=='running')return;
+ const now=audio.currentTime,last=voices.get(name);
+ if(last!==undefined&&now-last<.030)return;
+ voices.set(name,now);
+ const gain=audio.createGain();gain.connect(mix);gain.gain.value=level;
+ const buffer=buffers.get(name);
+ if(buffer){const src=audio.createBufferSource();src.buffer=buffer;src.connect(gain);src.onended=()=>gain.disconnect();src.start(now);}
+ else gain.disconnect();
+ if(name==='impact'||!buffer){
+  const osc=audio.createOscillator(),env=audio.createGain(),bass=['impact','lock','launch'].includes(name);
+  const duration=bass?.18:.09;osc.frequency.setValueAtTime(bass?108:392,now);osc.frequency.exponentialRampToValueAtTime(bass?50:350,now+duration);
+  env.gain.setValueAtTime(.0001,now);env.gain.exponentialRampToValueAtTime(level*(bass?.8:.18),now+.008);env.gain.exponentialRampToValueAtTime(.0001,now+duration);
+  osc.connect(env);env.connect(mix);osc.start(now);osc.stop(now+duration);osc.onended=()=>env.disconnect();
+ }
+}
+function tone(kind='click'){
+ const name=({turn:'beam',win:'chime',lose:'lock',block:'lock',missile:'launch',power:'charge',buff:'charge',hit:'impact'})[kind]||'step';
+ playCue(name,kind==='tick'?.17:.29);
+}
 async function request(path,data){const r=await fetch('/api/'+path,{method:data?'POST':'GET',headers:{...(data?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})},body:data?JSON.stringify(data):undefined,signal:AbortSignal.timeout(8000)});const result=await r.json();if(!r.ok){if(r.status===401){sessionStorage.removeItem('kare-session');token=null;}throw Error(result.error||'Sunucuya ulaşılamadı.');}return result;}
 function update(result,initial=false){
  const next=result.state;
@@ -44,7 +79,8 @@ function update(result,initial=false){
    battleSound('launch','missile');const room=state.code;
    setTimeout(()=>{if(state?.code===room)battleSound('impact','hit');},board.reduced?0:FX_DURATION*.52);
   }
-  if(e.type==='hit')battleSound('step','hit');
+  if(e.type==='hit')battleSound(e.capture?'impact':'lock');
+  if(e.type==='zone'&&(e.removed?.length||e.damaged?.length))battleSound(e.removed?.length?'impact':'lock');
   if(e.type==='place')tone('place');
   if(e.type==='turn'&&e.player===myId)tone('turn');
   if(e.type==='power'&&e.power!==5)battleSound([8,11,12].includes(e.power)?'lock':[9,10].includes(e.power)?'charge':e.power===6?'beam':'step');
@@ -66,8 +102,20 @@ function update(result,initial=false){
  document.body.dataset.myTurn=String(Boolean(myTurn()));
  render();
 }
-function command(a,{quiet=false}={}){const work=queue.then(async()=>{try{const result=await request('action',a);update(result);return true;}catch(e){if(!quiet)toast(e.message);return false;}});queue=work.catch(()=>{});return work;}
-async function connect(mode,solo=false){if(leaving)return;leaving=true;for(const id of ['quick-play','create','join'])$(id).disabled=true;try{tone();const result=await request(mode,{name:$('name').value.trim(),...(mode==='create'?{mode:selectedMode}:{}),code:$('code').value.trim()});token=result.token;sessionStorage.setItem('kare-session',token);update(result,true);if(solo){await command({type:'bot'});await command({type:'bot'});await command({type:'start'});}}catch(e){toast(e.message);}finally{leaving=false;for(const id of ['quick-play','create','join'])$(id).disabled=false;}}
+let strikeLane=null;
+function command(a,{quiet=false}={}){
+ const run=async()=>{try{const result=await request('action',a);update(result);return true;}catch(e){if(!quiet)toast(e.message);return false;}};
+ const cell=isSiege()&&a.type==='place'&&a.expectedOwner?myId+':'+a.x+','+a.y+':'+a.expectedOwner:null;
+ if(cell){
+  // Same-target strikes are independent. Other commands still wait for every earlier strike.
+  if(strikeLane?.cell!==cell)strikeLane={cell,slots:Array(3).fill(queue),next:0};
+  const lane=strikeLane,index=lane.next++%lane.slots.length;
+  const work=lane.slots[index].then(run);lane.slots[index]=work.catch(()=>{});
+  queue=Promise.all(lane.slots);return work;
+ }
+ strikeLane=null;const work=queue.then(run);queue=work.catch(()=>{});return work;
+}
+async function connect(mode,solo=false){if(leaving)return;leaving=true;for(const id of ['quick-play','create','join'])$(id).disabled=true;try{playCue('chime',.24);const result=await request(mode,{name:$('name').value.trim(),...(mode==='create'?{mode:selectedMode}:{}),code:$('code').value.trim()});token=result.token;sessionStorage.setItem('kare-session',token);update(result,true);if(solo){await command({type:'bot'});await command({type:'bot'});await command({type:'start'});}}catch(e){toast(e.message);}finally{leaving=false;for(const id of ['quick-play','create','join'])$(id).disabled=false;}}
 function modal(title,html){$('modal-title').textContent=title;$('modal-body').innerHTML=html;if(!$('modal').open)$('modal').showModal();}
 function powerCard(pow,button='',extra=''){return `<article class="power-card"><span class="power-icon power-${pow.id}">${isSiege()?'<img class="siege-art" alt="" src="/assets/siege/card-'+pow.id+'.webp">':powerIcon(pow.id)}</span><h3>${esc(pow.name)}</h3><p>${esc(pow.desc)}</p>${extra}${button}</article>`;}
 function render(){const p=me(),s=state;if(!s)return;const waiting=animating||Date.now()<(s.revealUntil||0);show('welcome',false);show('exit');show('lobby',s.stage==='lobby');show('roster',s.stage!=='lobby');show('actions',['playing','ended'].includes(s.stage));show('hud',s.stage!=='lobby');show('map-controls',s.stage!=='lobby');show('draft',s.stage==='draft');show('countdown',s.stage==='countdown');$('room-label').textContent='Oda '+s.code;$('copy-code').textContent=s.code;
@@ -86,16 +134,7 @@ function setHint(text){show('target-hint',!!text);document.querySelector('#targe
 function setTarget(t,text){target=t;board.target=t?.power===5?'missile':t?.type;setHint(text);setPane('map');$('modal').close();}
 function clearTarget(){target=null;board.target=null;setHint('');}
 async function cell(x,y){if(animating||Date.now()<(state?.revealUntil||0))return;if(state?.stage==='placement'){if(isSiege()){if(!me().ready&&!me().spawn)await command({type:'setup',x,y});}else if(turn()?.id===myId)await command({type:'setup',x,y});return;}if(!myTurn())return;if(isSiege()&&!target&&state.board[x+','+y]&&state.board[x+','+y].owner!==myId&&siege.blockAttack())return;if(me().lossRemaining){await command({type:'dismiss',x,y});return;}if(target){const t=target;let a;if(t.type==='heal')a={type:'heal',x,y,amount:t.amount};else if(t.type==='general')a={type:'general',x,y};else a={type:'power',power:t.power,x,y};if(await command(a))clearTarget();}else if(me().pending+me().reform>0)await command({type:'place',x,y,...(isSiege()?{expectedOwner:state.board[x+','+y]?.owner??null}:{})},{quiet:false});}
-const sounds=new Map(), lastSample=new Map();
-function battleSound(sample,fallback='power'){
- if(!soundOn)return;
- if(typeof Audio==='undefined'){tone(fallback);return;}
- if(!sounds.has(sample)){const clip=new Audio('/assets/battle/'+sample+'.ogg');clip.volume=.34;sounds.set(sample,clip);}
- const clip=sounds.get(sample),now=Date.now();
- if(now-(lastSample.get(sample)||0)<125)return;
- lastSample.set(sample,now);clip.currentTime=0;
- clip.play().catch(()=>tone(fallback));
-}
+function battleSound(sample){playCue(sample);}
 let resultTimer;
 function diceResult(e){
  const face=multiplierLabel(e.value);
@@ -153,7 +192,7 @@ $('heal').onclick=()=>{modal('Generaline can ver',`<p>Her kazanılmış asker ge
 $('auto-place').onclick=async()=>{$('auto-place').disabled=true;await command({type:'auto-place'});render();};
 $('focus').onclick=()=>board.focus(myId);$('fit').onclick=()=>board.fit();$('zoom-in').onclick=()=>board.zoomBy(1.25);$('zoom-out').onclick=()=>board.zoomBy(1/1.25);$('sound').onclick=()=>{soundOn=!soundOn;localStorage.setItem('kare-sound',soundOn?'on':'off');$('sound').innerHTML=icon(soundOn?'sound':'muted');$('sound').setAttribute('aria-pressed',String(soundOn));toast(soundOn?'Ses açık':'Ses kapalı');tone();};$('sound').innerHTML=icon(soundOn?'sound':'muted');$('sound').setAttribute('aria-pressed',String(soundOn));$('exit').onclick=()=>{modal('Maçtan ayrıl',`<p>Aktif oyunda sıran süre dolunca geçer. Bu sekmeyi kapatmak oturumunu hemen silmez. Ana menüye dönersen yeni bir komutan olarak başlayacaksın.</p><button id="exit-confirm" style="margin-top:20px">Ana menüye dön</button>`);$('exit-confirm').onclick=reset;};
 async function poll(){if(!token||polling)return;polling=true;try{const r=await request('state');if(connectionFailures){document.querySelector('.connection')?.remove();toast('Bağlantı geri geldi.');}connectionFailures=0;update(r,!state);}catch(e){connectionFailures++;if(connectionFailures===2){const el=document.createElement('div');el.className='connection';el.textContent='Bağlantı bekleniyor… Oyun sunucusunu açık tut.';document.body.appendChild(el);}if(!token){state=null;previousStage='';document.body.dataset.stage='menu';menuMotion(true);for(const id of ['lobby','draft','countdown','hud','roster','actions','map-controls','exit','target-hint','arena-callout'])show(id,false);show('welcome');$('modal').close();toast(e.message);}}finally{polling=false;}}
-setInterval(poll,420);setInterval(timer,250);if(token)void poll();
+let lastSync=0;setInterval(()=>{const now=Date.now();if(now-lastSync>=(isSiege()&&state?.stage==='playing'&&!document.hidden?140:400)){lastSync=now;void poll();}},150);setInterval(timer,250);if(token)void poll();
 
 function preview(){if(isSiege())return;if(!state||!me())return;const limit=units(state,myId).length,p=me(),locked=state.lock&&state.lock!==myId;$('troop-slider').max=limit;$('money-slider').max=locked?0:p.money;$('troop-slider').value=$('bet-troops').value;$('money-slider').value=$('bet-money').value;const disabled=!myTurn()||p.rolled||animating||Date.now()<(state.revealUntil||0)||Boolean(p.lossRemaining);for(const id of ['troop-slider','money-slider','preset-1','preset-2','preset-3','preset-4','last-bet','skip-roll'])$(id).disabled=disabled;$('bet-badges').textContent=[p.double?'×2 Çifte kazanç':'',p.lucky?'Eksi kaybı korunuyor':'',locked?'Kasa kilitli':''].filter(Boolean).join(' · ');$('bet-formula').textContent='('+ $('bet-troops').value+' + '+$('bet-money').value+') × 2'+(p.double?' × 2':'')+' = '+((Number($('bet-troops').value)+Number($('bet-money').value))*2*(p.double?2:1))+' asker (+2 sonucu)';document.body.dataset.theme=state.theme||'technology';const rows=betPreview(state,myId,Number($('bet-troops').value),Number($('bet-money').value));$('bet-preview').innerHTML=rows?rows.map(v=>'<span><b>'+multiplierLabel(v.value)+'</b> '+(v.value>0?v.gain+' asker kazan':'−'+v.loss+' asker / −'+v.money+'$')+'</span>').join(''):'Geçerli bir bahis gir.';}
 $('bet-troops').oninput=preview;$('bet-money').oninput=preview;

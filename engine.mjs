@@ -190,7 +190,7 @@ function paySiege(s,until){
   if(p.shield&&p.shieldUntil<=until)p.shield=false;
  }
 }
-function pulseZone(s,pulses,rng){
+function pulseZone(s,rng){
  const zone=s.siege,oldInset=zone.inset;
  const prev=zone.bounds||{left:oldInset,right:SIZE-1-oldInset,top:oldInset,bottom:SIZE-1-oldInset};
  if(oldInset<SIZE/2){
@@ -198,16 +198,35 @@ function pulseZone(s,pulses,rng){
   zone.bounds={left:prev.left+dx,right:prev.right-(2-dx),top:prev.top+dy,bottom:prev.bottom-(2-dy)};
  }
  zone.inset=Math.min(SIZE/2,oldInset+1);
- const removed=[],damaged=[],masks=new Set();
+ const removed=[],damaged=[],masks=new Set(),doomed=new Set();
  for(const [k,u] of Object.entries(s.board)){
   const [x,y]=xy(k);
   if(x>=prev.left&&x<=prev.right&&y>=prev.top&&y<=prev.bottom&&oldInset<SIZE/2)continue;
-  const owner=player(s,u.owner);let hits=pulses;
-  if(owner.mask){masks.add(owner);hits--;}
-  if(!hits)continue;
-  if(u.hp>5*hits){u.hp-=5*hits;damaged.push([x,y]);}
+  const owner=player(s,u.owner);
+  if(owner.mask){masks.add(owner);continue;}
+  if(!u.hp){doomed.add(k);continue;}
+  const damage=u.zoneDamage||5;
+  if(u.hp>damage){u.hp-=damage;u.zoneDamage=damage*2;damaged.push([x,y]);}
   else{delete s.board[k];removed.push([x,y]);}
  }
+ // Keep a connected backbone from each surviving general to all surviving land in its component.
+ const visited=new Set();
+ for(const [root,general] of Object.entries(s.board)){
+  if(!general.hp||visited.has(root))continue;
+  const path=new Map(),queue=[root];visited.add(root);
+  for(let i=0;i<queue.length;i++){
+   const k=queue[i];
+   for(const [x,y] of neighbors(...xy(k))){
+    const n=key(x,y);
+    if(visited.has(n)||s.board[n]?.owner!==general.owner)continue;
+    visited.add(n);path.set(n,k);queue.push(n);
+   }
+  }
+  for(let i=queue.length-1;i>0;i--){
+   const k=queue[i];if(!doomed.has(k))doomed.delete(path.get(k));
+  }
+ }
+ for(const k of doomed){delete s.board[k];removed.push(xy(k));}
  for(const p of masks)p.mask=false;
  for(const p of s.players)if(!units(s,p.id).length)p.reform=0;
  event(s,'zone',{inset:zone.inset,removed,damaged});eliminate(s);
@@ -219,14 +238,8 @@ function siegeTick(state,now,rng){
  const s=structuredClone(state),zone=s.siege;
  if(!zone.war&&now>=zone.warAt){zone.war=true;event(s,'war');log(s,'Gelişim tamamlandı. Kuşatma başladı!');}
  while(s.stage==='playing'&&now>=zone.nextShrink){
-  let pulses=1;
-  if(zone.inset===SIZE/2){
-   // With no safe cells left, leap only as far as the next army elimination.
-   const untilDeath=Math.min(...s.players.filter(p=>!p.eliminated).map(p=>Math.max(1,...units(s,p.id).map(([,u])=>Math.ceil(u.hp/5)))+(p.mask?1:0)));
-   pulses=Math.min(untilDeath,1+Math.floor((now-zone.nextShrink)/SIEGE.shrinkMs));
-  }
-  const at=zone.nextShrink+(pulses-1)*SIEGE.shrinkMs;
-  paySiege(s,at);zone.nextShrink=at+SIEGE.shrinkMs;pulseZone(s,pulses,rng);
+  const at=zone.nextShrink;
+  paySiege(s,at);zone.nextShrink=at+SIEGE.shrinkMs;pulseZone(s,rng);
  }
  if(s.stage==='playing')paySiege(s,now);
  s.deadline=zone.war?zone.nextShrink:zone.warAt;s.updated=now;

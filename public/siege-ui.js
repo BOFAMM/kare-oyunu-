@@ -17,7 +17,7 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
  $('mode-siege').onclick=()=>mode(true);$('mode-classic').onclick=()=>mode(false);
  function sync(now){if(Number.isFinite(now))offset=now-Date.now();}
  function rules(){
-  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından üç dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Lazer 45 saniyede bir farklı bir odağa doğru daralır. İki halka dışarıda kalan asker ölür; general her darbede 5 can kaybeder.</li></ol>');
+  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından üç dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Lazer 45 saniyede bir farklı bir odağa doğru daralır. İki daralma dışarıda kalan asker ölür. Generalin orduya bağlantı hattı korunur. General ilk zehir isabetinde 5 can kaybeder; sonraki isabetler 10, 20, 40 diye büyür.</li></ol>');
  }
  let lastSecond=-1,stage='',notice='';
  function alarm(title,detail){
@@ -35,7 +35,7 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
   const now=Date.now()+offset,seconds=end=>Math.max(0,Math.ceil((end-now)/1000));
   if(s.stage==='countdown'){
    const n=seconds(s.deadline),el=$('countdown').querySelector('strong');
-   if(n!==lastSecond){el.textContent=n;lastSecond=n;tone('tick');if(!matchMedia('(prefers-reduced-motion: reduce)').matches)el.animate([{transform:'scale(1.25)'},{transform:'scale(1)'}],{duration:350});}
+   if(n!==lastSecond){el.textContent=n;lastSecond=n;tone('tick');if(!matchMedia('(prefers-reduced-motion: reduce)').matches)el.animate([{transform:'scale(1.07)'},{transform:'scale(1)'}],{duration:350});}
    return;
   }
   if(s.stage==='placement'){$('hud').textContent=s.players.filter(q=>q.ready).length+' / '+s.players.length+' hazır';return;}
