@@ -1,5 +1,7 @@
 import {ODDS,POWERS,multiplierLabel} from './rules.js';
 
+import {SIEGE_POWERS} from './siege-rules.js';
+
 export function installAdmin(currentRoom){
  const el=id=>document.getElementById('admin-'+id);
  const dialog=el('dialog');
@@ -16,6 +18,12 @@ export function installAdmin(currentRoom){
  const showPlayer=()=>{
   showEffect();
   const p=player(),r=room();
+  const siege=r?.mode==='siege',cards=siege?SIEGE_POWERS:POWERS;
+  fill(el('power'),[['','Güç eklenmesin'],...cards.map(c=>[String(c.id),c.name])],el('power').value);
+  fill(el('card'),cards.map(c=>[String(c.id),c.name]),el('card').value);
+  fill(el('move'),siege?[...moves.filter(([id])=>!['roll','end','dismiss','auto-dismiss','convert'].includes(id)),['haste','Üretimi hızlandır']]:moves,el('move').value);
+  fields();
+  for(const id of ['queue','random','rearm','turn','effect-on','effect-off','roll','queued'])el(id).hidden=siege;
   el('position').textContent=p?.position?'Ordunun referans karesi (X, Y) · '+p.position:'';
   fill(el('target'),(r?.players||[]).filter(q=>q.id!==p?.id&&!q.eliminated).map(q=>[q.id,q.name]),el('target').value);
   el('round').value=r?.round??1;
@@ -24,7 +32,7 @@ export function installAdmin(currentRoom){
   const playing=r?.stage==='playing'&&p&&!p.eliminated;
   el('match').disabled=!playing||busy;
   el('snapshot').disabled=r?.stage!=='playing'||busy;el('restore').disabled=!r?.checkpoint||busy;
-  el('advance').disabled=!r||!['draft','placement','countdown','playing'].includes(r.stage)||busy;
+  el('advance').disabled=(siege&&r?.stage==='playing')||!r||!['draft','placement','countdown','playing'].includes(r.stage)||busy;
   el('room-info').textContent=r?(['lobby','draft','placement','countdown','playing','ended'].includes(r.stage)?({
    lobby:'Lobide',draft:'Güç seçiminde',placement:'Yerleşimde',countdown:'Başlıyor',playing:'Maç sürüyor',ended:'Maç bitti'
   })[r.stage]:'')+' · '+r.players.length+' oyuncu':'Henüz oda yok.';
@@ -75,7 +83,7 @@ export function installAdmin(currentRoom){
  ];
  fill(el('move'),moves);fill(el('card'),POWERS.map(p=>[String(p.id),p.name]));
  function fields(){
-  const move=el('move').value,power=POWERS.find(p=>p.id===Number(el('card').value));
+  const move=el('move').value,power=(room()?.mode==='siege'?SIEGE_POWERS:POWERS).find(p=>p.id===Number(el('card').value));
   const cell=['place','dismiss','heal','general'].includes(move)||(move==='power'&&power?.target==='cell');
   for(const [id,visible] of Object.entries({card:['power','buy'].includes(move),target:move==='power'&&power?.target==='player',x:cell,y:cell,amount:['heal','recruit','roll'].includes(move),percent:move==='convert'})){
    el(id).closest('label').hidden=!visible;el(id).disabled=!visible;

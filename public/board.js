@@ -2,6 +2,25 @@ import {drawCharacter,preloadCharacter} from './sprites.js';
 import {THEMES,generalById,teamColor} from './cosmetics.js';
 import {battleImage,FX_DURATION,impact,missileEffect,powerEffect,teleportMotion} from './battle-fx.js';
 import {SIZE,COLORS,project,unproject,xy,key,units,adjacent,inside,dismissalPlan} from './rules.js';
+// Draw in board coordinates so panning, zoom and hit testing share one boundary.
+function siegeBoundary(c,zone,t){
+ if(!zone?.war)return;
+ function ring(n){
+  const lo=n-.5,hi=SIZE-.5-n;
+  [[lo,lo],[hi,lo],[hi,hi],[lo,hi]].forEach(([x,y],i)=>{
+   const p=project(x,y);if(i)c.lineTo(p.x,p.y);else c.moveTo(p.x,p.y);
+  });c.closePath();
+ }
+ c.save();c.beginPath();ring(0);if(zone.inset<SIZE/2)ring(zone.inset);
+ c.clip('evenodd');c.fillStyle='rgba(205,31,68,.20)';c.fillRect(-1300,-20,2600,1660);
+ const glow=c.createLinearGradient(0,0,80,190);
+ glow.addColorStop(0,'transparent');glow.addColorStop(.5,'rgba(255,84,99,.14)');glow.addColorStop(1,'transparent');
+ c.translate(0,(t/30)%190-190);
+ for(let i=-1;i<10;i++){c.fillStyle=glow;c.fillRect(-1300,0,2600,190);c.translate(0,190);}
+ c.restore();if(zone.inset>=SIZE/2)return;
+ c.save();c.beginPath();ring(zone.inset);c.lineJoin='round';c.strokeStyle='#ff245b';c.shadowColor='#ff244f';c.shadowBlur=11;c.lineWidth=6;c.stroke();
+ c.shadowBlur=0;c.strokeStyle='#fff5df';c.lineWidth=2;c.setLineDash([40,9]);c.lineDashOffset=-t/35;c.stroke();c.restore();
+}
 const guardSkins=new Map();
 function guardImage(base,color){
  if(!base?.naturalWidth)return null;
@@ -49,7 +68,7 @@ export class Board{
     const attack=events.find(e=>e.type==='hit'&&e.x===x&&e.y===y);
     const retreat=!!withdrawal || (removed&&!attack&&!shell&&!poison.has(k)&&actor?.lossRemaining>0);
     if(!retreat&&removed&&(shifted.has(u.owner)||poison.has(k)))continue;
-    this.effects.push({type:retreat?'retreat':removed?'fall':'damage',x,y,hp:withdrawal?.hp??u.hp,
+    this.effects.push({type:retreat?'retreat':removed?'fall':'damage',x,y,damage:u.hp-(next?.hp||0),hp:withdrawal?.hp??u.hp,
       skin:withdrawal?.skin??actor?.generalSkin,color:withdrawal?.color||teamColor(actor),
       variant:shell?'fire':generalById(s.players.find(p=>p.id===attack?.player)?.generalSkin)?.id.startsWith('fairy')?'arcane':'slash',
       start:now+(shell&&!this.reduced?FX_DURATION*.52:0)});
@@ -165,7 +184,7 @@ export class Board{
    c.drawImage(im,ox+wave,oy+y/scale,sw,h/scale,0,y,this.w,h);
   }
  }
- c.save();c.translate(this.w/2+this.pan.x,this.h/2+this.pan.y-784*this.zoom);c.scale(this.zoom,this.zoom);c.drawImage(this.terrain,-1330,-100);
+ c.save();c.translate(this.w/2+this.pan.x,this.h/2+this.pan.y-784*this.zoom);c.scale(this.zoom,this.zoom);c.drawImage(this.terrain,-1330,-100);siegeBoundary(c,this.state.siege,this.reduced?0:t);
  const s=this.state,board=s?.board||{'21,20':{owner:'demo',hp:10},'22,20':{owner:'demo',hp:0},'21,21':{owner:'demo',hp:0},'22,21':{owner:'demo',hp:0},'21,22':{owner:'demo',hp:0},'22,22':{owner:'demo',hp:0},'26,26':{owner:'demo2',hp:10},'27,26':{owner:'demo2',hp:0},'26,27':{owner:'demo2',hp:0}};
  const players=s?.players||[{id:'demo',color:COLORS[0]},{id:'demo2',color:COLORS[1]}];
  const people=new Map(players.map(p=>[p.id,p]));
@@ -237,7 +256,7 @@ export class Board{
    if(e.type==='hit'||e.variant==='fire')impact(c,p.x,p.y-18,this.reduced?.5:age,e.variant==='fire'?'#ff9360':color,e.variant);
    if(e.type==='damage'){
     c.globalAlpha=1-age;c.font='900 16px system-ui';c.textAlign='center';c.fillStyle='#fff4cc';
-    c.fillText('−1',p.x,p.y-48-(this.reduced?0:age*16));
+    c.fillText('−'+(e.damage||1),p.x,p.y-48-(this.reduced?0:age*16));
    }
   }else{
    c.globalAlpha=1-age;this.diamond(c,p.x,p.y,color+'28',color);c.strokeStyle=color;
