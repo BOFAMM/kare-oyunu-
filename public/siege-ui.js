@@ -17,7 +17,7 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
  $('mode-siege').onclick=()=>mode(true);$('mode-classic').onclick=()=>mode(false);
  function sync(now){if(Number.isFinite(now))offset=now-Date.now();}
  function rules(){
-  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından iki dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Altın bayrak bu maçın lazer hedefini gösterir. Alan bayrağa doğru 45 saniyede bir daralır. Kırmızı alana asker koyabilirsin. Daralma anında dışarıdaki askerler düşer. Dışarıda kalan general sırasıyla 5, 10, 20, 40 can kaybeder.</li><li>Askerine dokununca kasana 1 $ döner. Generaline dokun, sonra haritada boş bir kare seçerek onu taşı.</li><li>Her market ürünü satın alındıktan 30 saniye sonra tekrar alınabilir. Elindeki kartları uygun oyun evresinde hemen kullanabilirsin.</li></ol>');
+  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından iki dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Altın bayrak bu maçın lazer hedefini gösterir. Alan bayrağa doğru 45 saniyede bir daralır. Kırmızı alana asker koyabilirsin. Daralma anında dışarıdaki askerler düşer. Dışarıda kalan general sırasıyla 5, 10, 20, 40 can kaybeder.</li><li>Askerine dokununca kasana 1 $ döner. Generaline dokun, sonra kendi normal askerine dokunarak yer değiştir veya bağlantıyı koruyan boş bir kare seç.</li><li>Her market ürünü satın alındıktan 30 saniye sonra tekrar alınabilir. Elindeki kartları uygun oyun evresinde hemen kullanabilirsin.</li></ol>');
  }
  let lastSecond=-1,stage='',notice='';
  function alarm(title,detail){
@@ -116,7 +116,6 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
   };
  }
  $('siege-market').onclick=shop;
- $('siege-orders').onclick=()=>modal('Sahadaki ordular',summary());
  $('siege-auto').onclick=()=>command({type:'auto-place'});
  $('siege-hand').onclick=e=>{
   const b=e.target.closest('[data-card]');if(!b)return;const c=SIEGE_POWERS.find(c=>c.id===Number(b.dataset.card));if(c.hostile&&blockAttack())return;const reason=powerBlocked(c);view='card:'+c.id;

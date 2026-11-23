@@ -8,7 +8,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createRoom,addPlayer,tick} from '../engine.mjs';
 
-test('two HTTP clients racing for a cell spend one unit, retain the losing order budget and can continue',async()=>{
+test('two HTTP clients racing for a cell spend one unit, retain the losing order budget and can continue',async t=>{
  const dir=await mkdtemp(path.join(tmpdir(),'kare-siege-race-'));
  const root=fileURLToPath(new URL('../',import.meta.url));
  let child;
@@ -34,6 +34,27 @@ test('two HTTP clients racing for a cell spend one unit, retain the losing order
   const newer=await poll(state.revision-1);assert.equal(newer.state.revision,state.revision);
   assert.equal(state.players.find(p=>p.id===winner).pending,4);assert.equal(state.players.find(p=>p.id===loser).pending,5);
   assert.equal((await place(loser,loser==='a'?19:23,20)).status,200);
+  async function api(route,data,token){
+   const reply=await fetch(base+'/api/'+route,{method:data?'POST':'GET',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:data?JSON.stringify(data):undefined});
+   assert.equal(reply.status,200);return reply.json();
+  }
+  for(const mode of ['classic','siege'])await t.test(mode+' keeps choices private until the final pick, then reveals owned powers',async()=>{
+   const host=await api('create',{name:'Koral',mode}),guest=await api('join',{name:'Mercan',code:host.state.code});
+   const draft=await api('action',{type:'start'},host.token);
+   const offers=draft.state.players.find(p=>p.id===host.id).offers;
+   await api('action',{type:'choose',powers:offers.slice(0,2)},host.token);
+   const waiting=await api('state',null,guest.token),other=waiting.state.players.find(p=>p.id===host.id);
+   assert.equal(waiting.state.stage,'draft');assert.deepEqual(other.inventory,{});assert.deepEqual(other.offers,[]);
+   assert.equal(other.money,undefined);assert.equal(other.generalHP,undefined);
+   const picks=waiting.state.players.find(p=>p.id===guest.id).offers.slice(0,2);
+   const finished=await api('action',{type:'choose',powers:picks},guest.token);
+   assert.notEqual(finished.state.stage,'draft');
+   const revealed=finished.state.players.find(p=>p.id===host.id);
+   assert.equal(typeof revealed.money,'number');assert.deepEqual(revealed.offers,[]);
+   assert.deepEqual(Object.keys(revealed.inventory).sort(),offers.slice(0,2).map(String).sort());
+   const returned=await api('state',null,host.token);
+   assert.deepEqual(Object.keys(returned.state.players.find(p=>p.id===guest.id).inventory).sort(),picks.map(String).sort());
+  });
  }finally{
   if(child&&child.exitCode===null){const done=once(child,'exit');child.kill();await done;}
   await rm(dir,{recursive:true,force:true});

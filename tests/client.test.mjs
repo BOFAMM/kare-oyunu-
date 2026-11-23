@@ -70,3 +70,14 @@ test('a siege card can be used while its repurchase timer runs',async()=>{
  const c=client(),s=siegeState();s.players[0].cooldowns={14:Date.now()+30000};c.set(s);
  await c.api.activate(14);assert.equal(c.backend.players[0].shield,true);assert.equal(c.backend.players[0].inventory[14],2);
 });
+
+test('match roster hides during draft and shows both armies, wallets and remaining uses after the draft',()=>{
+ for(const mode of ['classic','siege']){
+  const c=client(),s=mode==='siege'?siegeState():state();
+  s.players[0].offers=[4,5,14];s.players[1].inventory={14:2};s.players[1].money=57;
+  s.stage='draft';c.set(s);assert.equal(c.nodes.get('roster').classList.contains('hidden'),true);assert.equal(c.nodes.get('players').innerHTML,'');
+  s.stage='playing';c.set(s);assert.equal(c.nodes.get('roster').classList.contains('hidden'),false);
+  const panel=c.nodes.get('players').innerHTML;
+  for(const value of ['Gezgin','Misket','57 $','1 asker','1 general','Dokunulmazlık · 2 hak'])assert.ok(panel.includes(value),value);
+ }
+});

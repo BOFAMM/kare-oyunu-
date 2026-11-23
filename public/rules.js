@@ -52,3 +52,23 @@ export function dismissalPlan(s,id,k){
  return {ok:true,transfer};
 }
 export function betPreview(s,id,troops,money){const p=s.players.find(p=>p.id===id);if(!p||![troops,money].every(n=>Number.isSafeInteger(n)&&n>=0)||troops>units(s,id).length||money>p.money)return null;return ODDS.map(({v})=>({value:v,gain:v>0?(troops+money)*v*(p.double?2:1):0,loss:v<0&&!p.lucky?Math.min(troops*-v,units(s,id).filter(([,u])=>!u.hp).length):0,money:v<0&&!p.lucky?Math.min(money*-v,p.money):0}));}
+
+// A vacant destination must reconnect every branch formerly joined by the general.
+export function generalDestinations(s,owner,x,y){
+ const origin=key(x,y),seen=new Set([origin]),branches=[];
+ for(const [ax,ay] of neighbors(x,y)){
+  const start=key(ax,ay);if(seen.has(start)||s.board[start]?.owner!==owner)continue;
+  const queue=[start],edges=new Set();seen.add(start);
+  for(let i=0;i<queue.length;i++)for(const [nx,ny] of neighbors(...xy(queue[i]))){
+   const k=key(nx,ny);if(seen.has(k))continue;
+   if(s.board[k]?.owner===owner){seen.add(k);queue.push(k);}
+   else if(!s.board[k])edges.add(k);
+  }
+  branches.push(edges);
+ }
+ return (tx,ty)=>{
+  if(!inside(tx,ty))return false;
+  const k=key(tx,ty),u=s.board[k];
+  return u?u.owner===owner&&!u.hp:branches.every(edges=>edges.has(k));
+ };
+}

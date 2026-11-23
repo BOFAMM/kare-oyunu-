@@ -15,3 +15,7 @@ ZIP içeriğini bir klasöre aç. Node.js 22 veya üzeri kurulu bilgisayarda, bu
 Özel giriş için oyun adresine `#komutan-girisi` ekle ve görünen Yönetici düğmesine bas. Windows'ta özel deneme sunucusu için **Yonetici Baslat.cmd** dosyasını çalıştır. Canlı site kurulumu ve paneldeki işlemler **YONETICI-TESTI.md** dosyasındadır.
 
 **Kare-Oyunu-Yedi-Dunya-Yamasi.zip** isteğe bağlıdır. ZIP'i ana oyun klasörüne açtığında **Dünyalar** düğmesi görünür. Depodan `public/worlds` klasörünü kaldırıp yeniden dağıttığında bu düğme de kalkar. Temel oyunun hareketli kıyısı ana pakete dahildir.
+
+## Sürüm takibi
+
+Ana menünün sağ altındaki sürüm numarası package.json dosyasındaki version alanından gelir. Her dağıtımda bu numarayı artır ve tam ZIP adında aynı numarayı kullan.

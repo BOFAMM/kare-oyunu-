@@ -1,6 +1,6 @@
 import {SIEGE,SIEGE_POWERS} from './public/siege-rules.js';
 import {GENERALS,generalById,teamColor} from './public/cosmetics.js';
-import {ODDS,SIZE,ROLL_REVEAL_MS,POWERS,COLORS,key,xy,inside,neighbors,units,adjacent,face,shuffled,connected,dismissalPlan,multiplierLabel} from './public/rules.js';
+import {generalDestinations,ODDS,SIZE,ROLL_REVEAL_MS,POWERS,COLORS,key,xy,inside,neighbors,units,adjacent,face,shuffled,connected,dismissalPlan,multiplierLabel} from './public/rules.js';
 const need=(b,m)=>{if(!b)throw Error(m);};
 const integer=(v,min=0,max=1000000)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
 export function createRoom(code,id,name,now=Date.now()){return {code,host:id,stage:'lobby',players:[],board:{},order:[],cursor:0,round:1,turn:0,deadline:0,logs:[],events:[],seq:0,settings:{manual:false},created:now,updated:now};}
@@ -219,13 +219,15 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random,forcedRoll}={}){c
   const k=key(a.x,a.y),unit=s.board[k];
   need(siege&&inside(a.x,a.y)&&unit?.owner===id&&!unit.hp,'Kendi normal askerini seç.');
   need(units(s,id).length>1,'Son birliğini terhis edemezsin.');
+  need(canRemove(s,id,k),'Bu asker iki birliği birbirine bağlıyor. Önce hattın ucundaki bir askeri seç.');
   delete s.board[k];p.money++;event(s,'sell-troop',{x:a.x,y:a.y,player:id});break;
  }
  case 'move-general':{
   const source=key(a.x,a.y),destination=key(a.toX,a.toY),general=s.board[source];
   need(siege&&inside(a.x,a.y)&&general?.owner===id&&general.hp>0,'Kendi generalini seç.');
-  need(inside(a.toX,a.toY)&&!s.board[destination],'Generalin için boş bir kare seç.');
-  delete s.board[source];s.board[destination]=general;
+  need(generalDestinations(s,id,a.x,a.y)(a.toX,a.toY),'Boş hedef ordu hattını korumalı. Kendi normal askerinle yer değiştirebilirsin.');
+  const replacement=s.board[destination];
+  if(replacement)s.board[source]=replacement;else delete s.board[source];s.board[destination]=general;
   if(safeSiegeCell(s,a.toX,a.toY))delete general.zoneDamage;
   event(s,'move-general',{player:id,fromX:a.x,fromY:a.y,x:a.toX,y:a.toY});break;
  }
@@ -389,9 +391,10 @@ function siegeBotDecision(s,p,now){
   refuge=nextSiegeBounds(b,focus);
  const endangered=generals.find(([k])=>siegeExposure(refuge,...xy(k))>0);
  if(endangered){
+  const legal=generalDestinations(s,p.id,...xy(endangered[0]));
   let best=null,bestScore=Infinity;
   for(let y=refuge.top;y<=refuge.bottom;y++)for(let x=refuge.left;x<=refuge.right;x++){
-   const cell=key(x,y);if(s.board[cell])continue;
+   if(!legal(x,y))continue;
    const support=neighbors(x,y).some(([i,j])=>s.board[key(i,j)]?.owner===p.id);
    const score=toward(x,y)+(support?0:SIZE*2)+8*Math.max(0,4-distance[y*SIZE+x]);
    if(score<bestScore){best={toX:x,toY:y};bestScore=score;}

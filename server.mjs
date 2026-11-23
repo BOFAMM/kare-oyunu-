@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createRoom,addPlayer,act,tick,botStep,current,migrateSiegeRoom,configureTestMatch} from './engine.mjs';
 import {ODDS,units} from './public/rules.js';
 const root=path.dirname(fileURLToPath(import.meta.url)), rooms=new Map(), sessions=new Map();
+const gameVersion=JSON.parse(await readFile(path.join(root,'package.json'),'utf8')).version;
 const random=()=>randomInt(0,1000000000)/1000000000;
 const adminKey=process.env.GAME_ADMIN_KEY?.trim();
 const digest=value=>createHash('sha256').update(value).digest();
@@ -34,7 +35,19 @@ const dataDir=path.join(root,process.env.KARE_OWNER_LAB==='1'?'.owner-lab':'.dat
 await mkdir(dataDir,{recursive:true});
 try{const data=JSON.parse(await readFile(path.join(dataDir,'rooms.json'),'utf8'));for(const [k,v]of data.rooms)rooms.set(k,migrateSiegeRoom(v));for(const [k,v]of data.sessions)sessions.set(k,v);}catch(e){if(e.code!=='ENOENT'){console.error('Kayıt okunamadı; dosyayı korumak için sunucu durdu.',e.message);process.exit(1);}}
 async function save(){if(!dirty||saving)return;saving=true;dirty=false;try{await writeFile(path.join(dataDir,'rooms.tmp'),JSON.stringify({rooms:[...rooms],sessions:[...sessions]}));await rename(path.join(dataDir,'rooms.tmp'),path.join(dataDir,'rooms.json'));}catch(e){dirty=true;console.error('Kayıt yazılamadı:',e.message);}finally{saving=false;}}
-function view(s,id){const copy=structuredClone(s);for(const p of copy.players)if(p.id!==id){p.offers=[];if(s.mode==='siege')p.inventory={};}return copy;}
+function view(s,id){
+ const copy=structuredClone(s);
+ for(const p of copy.players){
+  if(p.id===id)continue;
+  p.offers=[];
+  if(s.stage==='draft'||s.stage==='lobby'){
+   p.inventory={};
+   // Instant classic draft powers can also be inferred from the wallet or general's HP.
+   delete p.money;delete p.generalHP;
+  }
+ }
+ return copy;
+}
 function reply(res,status,data){res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));}
 async function body(req){let str='';for await(const chunk of req){str+=chunk;if(str.length>8192)throw Error('İstek çok büyük.');}return JSON.parse(str||'{}');}
 const lastSeen=new Map(),limiter=new Map();
@@ -123,12 +136,13 @@ export const server=http.createServer(async(req,res)=>{try{
   catch(e){if(e.code==='ENOENT')return reply(res,404,{error:'Yama kurulu değil.'});throw e;}
  }
  const files={'/':'index.html','/index.html':'index.html','/style.css':'style.css','/app.js':'app.js','/rules.js':'rules.js','/board.js':'board.js','/cosmetics.js':'cosmetics.js','/assets/lava.png':'assets/lava.png'};
- const characterPath=/^\/assets\/characters\/(elf|fairy)-[1-3]\/(idle|walk|attack|hurt|die|portrait)\.png$/.test(url.pathname);const battlePath=/^\/assets\/battle\/(?:(?:bow|sword|staff|wand|shield|spear)\.png|(?:impact|launch|beam|lock|charge|step|chime)\.ogg)$/.test(url.pathname);const arenaFile=['guide-hand.webp','ocean.webp','citadel.webp','meadow.webp','guard.webp','crest.svg','sigils.svg','crown.png','sun-rune.png','moon-rune.png','ruby.png','ember.webp','jade.webp','amethyst.webp','timber.webp','hide.webp','steel.webp','sapphire.webp','ranger.webp','sprite.webp','frame.png','EricaOne-Regular.ttf','Outfit-Regular.ttf','Outfit-Bold.ttf'].some(file=>url.pathname==='/assets/arena/'+file);const modulePath=['/siege-ui.js','/siege-ui.css','/siege-rules.js','/touch-values.js','/guide.js','/scrollcraft.js','/arena.js','/sprites.js','/admin.js','/battle-fx.js'].includes(url.pathname);const siegeArt=/^\/assets\/siege\/[a-z0-9-]+\.(?:svg|webp|png)$/.test(url.pathname);const name=siegeArt||modulePath||battlePath||arenaFile?url.pathname.slice(1):characterPath?url.pathname.slice(1):files[url.pathname];if(!name)return reply(res,404,{error:'Dosya bulunamadı.'});let content=await readFile(path.join(root,'public',name));
+ const characterPath=/^\/assets\/characters\/(elf|fairy)-[1-3]\/(idle|walk|attack|hurt|die|portrait)\.png$/.test(url.pathname);const battlePath=/^\/assets\/battle\/(?:(?:bow|sword|staff|wand|shield|spear)\.png|(?:impact|launch|beam|lock|charge|step|chime)\.ogg)$/.test(url.pathname);const arenaFile=['arena-music.mp3','coach-calm.webp','coach-happy.webp','coach-alert.webp','guide-hand.webp','ocean.webp','citadel.webp','meadow.webp','guard.webp','crest.svg','sigils.svg','crown.png','sun-rune.png','moon-rune.png','ruby.png','ember.webp','jade.webp','amethyst.webp','timber.webp','hide.webp','steel.webp','sapphire.webp','ranger.webp','sprite.webp','frame.png','EricaOne-Regular.ttf','Outfit-Regular.ttf','Outfit-Bold.ttf'].some(file=>url.pathname==='/assets/arena/'+file);const modulePath=['/siege-ui.js','/siege-ui.css','/siege-rules.js','/touch-values.js','/guide.js','/guide-model.js','/guide.css','/scrollcraft.js','/arena.js','/sprites.js','/admin.js','/battle-fx.js'].includes(url.pathname);const siegeArt=/^\/assets\/siege\/[a-z0-9-]+\.(?:svg|webp|png)$/.test(url.pathname);const name=siegeArt||modulePath||battlePath||arenaFile?url.pathname.slice(1):characterPath?url.pathname.slice(1):files[url.pathname];if(!name)return reply(res,404,{error:'Dosya bulunamadı.'});let content=await readFile(path.join(root,'public',name));
  if(name==='index.html'){
+  content=content.toString().replace('{{GAME_VERSION}}',gameVersion);
   try{await access(path.join(root,'public/worlds/worlds.js'));content=content.toString().replace('</head>','<link rel="stylesheet" href="/worlds/worlds.css"><script type="module" src="/worlds/worlds.js"></script></head>');}
   catch(e){if(e.code!=='ENOENT')throw e;}
  }
- res.writeHead(200,{'Content-Type':name.endsWith('.ttf')?'font/ttf':name.endsWith('.svg')?'image/svg+xml':name.endsWith('.webp')?'image/webp':name.endsWith('.png')?'image/png':name.endsWith('.ogg')?'audio/ogg':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self'; frame-ancestors 'none'; base-uri 'none'"});res.end(req.method==='HEAD'?undefined:content);
+ res.writeHead(200,{'Content-Type':name.endsWith('.mp3')?'audio/mpeg':name.endsWith('.ttf')?'font/ttf':name.endsWith('.svg')?'image/svg+xml':name.endsWith('.webp')?'image/webp':name.endsWith('.png')?'image/png':name.endsWith('.ogg')?'audio/ogg':name.endsWith('.html')?'text/html; charset=utf-8':name.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8','Cache-Control':'no-cache','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self'; frame-ancestors 'none'; base-uri 'none'"});res.end(req.method==='HEAD'?undefined:content);
  }catch(e){reply(res,400,{error:e.message||'İşlem tamamlanamadı.'});}});
 const timer=setInterval(()=>{const now=Date.now();for(const [code,original]of rooms){try{let s=tick(original,now,random);const host=s.players.find(p=>p.id===s.host);if(host&&!host.bot&&now-(lastSeen.get(host.id)||s.created)>30000){const next=s.players.find(p=>!p.bot&&now-(lastSeen.get(p.id)||0)<5000);if(next&&next.id!==s.host){s=structuredClone(s);s.host=next.id;dirty=true;}}if((s.mode==='siege'&&s.stage==='playing'&&s.players.some(p=>p.bot&&!p.eliminated))||current(s)?.bot){const before=s;s=botStep(s,now,random,queuedRolls.get(code)?.get(current(s).id));acceptedRoll(before,s);}if(s!==original)commit(s);}catch(e){console.error('Oda işlemi başarısız:',code,e.message);}}void save();},360);
 const port=Number(process.env.PORT||3000);server.listen(port,process.env.HOST||'0.0.0.0',()=>console.log(`Kare Oyunu hazır: http://localhost:${server.address().port}`));

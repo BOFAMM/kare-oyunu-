@@ -8,6 +8,7 @@ export const powerIcon = id => icon(emblem[id] || 'spark');
 
 export function setPane(name) {
   document.body.dataset.pane = name;
+  document.querySelectorAll('button[aria-controls="roster"]').forEach(button=>button.setAttribute('aria-expanded',String(name==='roster')));
   document.querySelectorAll('#mobile-dock button').forEach(button =>
     button.setAttribute('aria-pressed', String(button.dataset.pane === name)));
 }
@@ -24,9 +25,17 @@ export function installArena({modal, rules, powerCard, play}) {
   byId('guide-powers').onclick = powers;
   byId('guide-rules').onclick = rules;
   byId('quick-play').onclick = play;
+  let rosterOpener;
+  for(const id of ['roster-launch','siege-orders']){
+    byId(id).onclick=()=>{
+      if(document.body.dataset.pane==='roster')setPane('map');
+      else{rosterOpener=byId(id);setPane('roster');byId('roster-close').focus({preventScroll:true});}
+    };
+  }
+  byId('roster-close').onclick=()=>{setPane('map');rosterOpener?.focus({preventScroll:true});};
   byId('mobile-dock').onclick = event => {
     const button = event.target.closest('button[data-pane]');
-    if (button) setPane(button.dataset.pane);
+    if (button){if(button.dataset.pane==='roster')rosterOpener=button;setPane(button.dataset.pane);}
   };
   byId('modal').addEventListener('close',()=>{
     const notice=byId('arena-callout');

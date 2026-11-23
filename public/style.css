@@ -290,3 +290,5 @@ dialog #live-guide{position:static;margin:5px 0;max-width:100%}body>#live-guide{
 
 @keyframes camp-arrival{from{opacity:.1;translate:0 7px}to{opacity:1;translate:0 0}}
 @media(prefers-reduced-motion:no-preference){.camp .wordmark{animation:camp-arrival .52s ease-out both}.camp-actions{animation:camp-arrival .46s .08s ease-out both}.camp-treasures{animation:camp-arrival .48s .14s ease-out both}.arena-callout strong{transition:color .18s}.relic-button:active:enabled{transform:translateY(1px)}}
+
+#game-version{display:none}body[data-stage=menu] #game-version{display:block;position:fixed;z-index:21;bottom:max(3px,env(safe-area-inset-bottom));right:max(6px,env(safe-area-inset-right));font:600 11px Outfit,sans-serif;letter-spacing:.05em;color:#ffedba;background:#172721e6;border-radius:5px;padding:2px 6px;pointer-events:none}#music-controls{display:inline-flex;align-items:center;gap:3px}#music-volume{width:clamp(38px,5vw,76px);padding:0;margin:0;accent-color:#e7b85f;min-width:0;height:24px}

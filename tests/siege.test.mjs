@@ -96,9 +96,11 @@ test('a stranded general can deploy into red and move anywhere free, including o
  s=tick(s,start+210000,rng);assert.equal(s.board['0,10'].hp,85);assert.equal(s.board['1,10'],undefined);
  s=run(s,'a',{type:'place',x:0,y:11,expectedOwner:null},210000);assert.equal(s.board['0,11'].owner,'a');
  const move={type:'move-general',x:0,y:10,toX:20,toY:20};
- assert.throws(()=>run(s,'a',move,210000),/boş/);assert.equal(s.board['0,10'].hp,85);
+ assert.throws(()=>run(s,'a',move,210000),/Boş/);assert.equal(s.board['0,10'].hp,85);
  assert.throws(()=>run(s,'b',{...move,toX:5},210000),/Kendi/);
  s=run(s,'a',{...move,toX:0,toY:12},210000);assert.equal(s.board['0,12'].zoneDamage,20);
+ assert.throws(()=>run(s,'a',{...move,x:0,y:12,toX:2,toY:10},210001),/hattını/);
+ s=run(s,'a',{type:'sell-troop',x:0,y:11},210001);
  s=run(s,'a',{...move,x:0,y:12,toX:2,toY:10},210001);
  assert.deepEqual(s.board['2,10'],{owner:'a',hp:85});assert.equal(s.board['0,12'],undefined);
  s=tick(s,start+255000,rng);assert.equal(s.board['0,11'],undefined);assert.equal(s.board['2,10'].hp,80);
@@ -112,12 +114,14 @@ test('a 100 HP general in the laser takes 5, 10, 20, 40, 80; troops never preser
   assert.equal(Boolean(s.board['1,15']),i===0);
  }
 });
-test('any ordinary troop can be refunded instantly, including a bridge; last unit and generals are protected',()=>{
+test('troop refunds preserve connected supply lines, allow selling endpoints and protect the last unit',()=>{
  let s=fixture();s.board['10,11']={owner:'a',hp:0};s.board['10,12']={owner:'a',hp:0};
  const sell={type:'sell-troop',x:10,y:11};
- s=run(s,'a',sell);assert.equal(s.players[0].money,81);assert.equal(s.board['10,11'],undefined);
+ assert.throws(()=>run(s,'a',sell),/bağlıyor/);
+ assert.equal(s.players[0].money,80);assert.ok(s.board['10,11']);
+ s=run(s,'a',{...sell,y:12});assert.equal(s.players[0].money,81);
+ s=run(s,'a',sell);assert.equal(s.players[0].money,82);assert.equal(s.board['10,11'],undefined);
  assert.throws(()=>run(s,'a',sell));assert.throws(()=>run(s,'a',{...sell,y:10}));
- s=run(s,'a',{...sell,y:12});assert.equal(s.players[0].money,82);
  s.board['10,10'].hp=0;assert.throws(()=>run(s,'a',{...sell,y:10}),/Son/);
  for(const type of ['unlock-sale','restore-troop','move-troop'])assert.throws(()=>run(s,'a',{type}));
 });
@@ -180,4 +184,13 @@ test('a blocked frontline can wear down its exposed flank without annexing a red
  const old=s.players[0].pending;s=run(s,'a',{type:'place',x:1,y:10,expectedOwner:'b'},165000);
  assert.ok(!s.board['0,10']);assert.equal(s.board['1,10'].owner,'b');assert.equal(s.players[0].pending,old-1);
  assert.ok(s.events.at(-1).flank);
+});
+
+test('a bridge general swaps with its own soldier without opening a gap',()=>{
+ let s=fixture();s.board={'40,40':{owner:'b',hp:10}};
+ for(let x=0;x<11;x++)s.board[x+',8']={owner:'a',hp:x===5?65:0};
+ const move={type:'move-general',x:5,y:8,toX:0,toY:9};
+ assert.throws(()=>run(s,'a',move),/hattını/);
+ const next=run(s,'a',{...move,toY:8});
+ assert.equal(next.board['0,8'].hp,65);assert.deepEqual(next.board['5,8'],{owner:'a',hp:0});assert.deepEqual(Object.keys(next.board).sort(),Object.keys(s.board).sort());
 });

@@ -1,80 +1,115 @@
-import {neighbors,units,connected} from './rules.js';
+import {guideAdvice} from './guide-model.js';
+import {POWERS,units} from './rules.js';
+import {SIEGE_POWERS} from './siege-rules.js';
 const $=id=>document.getElementById(id);
 const panel=$('live-guide'),hand=$('guide-hand'),toggle=$('guide-switch'),body=$('guide-body'),find=$('guide-find');
-let read,enabled=localStorage.getItem('kare-coach')!=='done',destination,lesson='',seenPower=false;
+const face=$('guide-face'),headline=$('guide-title'),step=$('guide-step'),spoken=$('guide-spoken');
+const media=matchMedia('(prefers-reduced-motion: reduce)');
+let read,enabled=localStorage.getItem('kare-coach')!=='done',destination,tile,lastLine='',frame=0,room,sequence,reply,cache;
 globalThis.kareGuide=provider=>{read=provider;refresh();};
-toggle.onclick=()=>{enabled=!enabled;localStorage.setItem('kare-coach',enabled?'on':'done');refresh();};
-find.onclick=()=>destination?.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
-function advice({state:s,p,mine,target,picks,board,animating}){
- const stage=s.stage;
- if(stage==='draft'){
-  if(p.chosen)return ['Takım hazır. Diğer komutanların seçimleri bekleniyor.'];
-  if(!p.generalSkin)return ['Önce ordunun başına bir general seç.','[data-skin]:not(:disabled)'];
-  if(picks.length<2)return [picks.length?'Bir güç daha seç.':'Üç karttan ilk gücünü seç.','[data-pick][aria-pressed=false]'];
-  return ['Seçimini onayla ve arenaya gir.','#confirm-powers'];
+toggle.onclick=()=>{
+ enabled=!enabled;localStorage.setItem('kare-coach',enabled?'on':'done');
+ if(!enabled){cancelAnimationFrame(frame);lastLine='';}
+ refresh();
+};
+find.onclick=()=>{
+ if(tile){const b=read()?.board;if(b)b.center(...tile,Math.max(.75,b.zoom));}
+ else destination?.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+ refresh();
+};
+const cue=(title,text,selector,mood='calm')=>({title,text,selector,mood});
+function modalLesson(dialog,data){
+ if(dialog.id!=='modal')return null;
+ const title=$('modal-title').textContent,s=data.state,p=data.p;
+ if(s.stage==='ended')return guideAdvice(data);
+ if($('siege-quantity'))return cue('Takviye miktarı','Artı ve eksi düğmeleriyle istediğin miktarı ayarla. Hazır olunca altın düğmeye dokun.','#siege-quantity button[type=submit]');
+ if($('siege-recruit')){
+  const choice=!units(s,p.id).some(([,u])=>u.hp)&&!$('siege-buy-general').disabled?'#siege-buy-general':!$('siege-recruit').disabled?'#siege-recruit':null;
+  return choice?cue('Saha marketi',choice==='#siege-recruit'?'Asker al düğmesi yedek birliğini doldurur. Aynı ürünü tekrar almak için 30 saniye gerekir.':'Sahada generalin yok. General çağır düğmesine dokun, sonra haritada yerini seç.',choice):cue('Market rafı','Alınabilecek ürünlerin üzerinde fiyatları var. Hazır kartın varsa çantandan hemen kullanabilirsin.','#close-modal');
  }
- if(s.mode==='siege'&&stage==='placement')return [p.spawn?(p.ready?'Hazırsın. Diğer ordular bekleniyor.':'Konumunu kontrol et ve Hazırım düğmesine dokun.'):'Ordu başlangıcın için haritadan bir kare seç.'];
- if(s.mode==='siege'&&stage==='playing'){
-  if(p.eliminated)return ['Ordun elendi. Mücadeleyi haritadan takip edebilirsin.'];
-  if(target)return [$('target-hint').textContent||'Haritada hedefini seç.','#board'];
-  const b=s.siege?.bounds;
-  if(s.siege?.war&&b){
-   const exposed=Object.entries(s.board).find(([k,u])=>{if(u.owner!==p.id||!u.hp)return false;const [x,y]=k.split(',').map(Number);return x<b.left||x>b.right||y<b.top||y>b.bottom;});
-   if(exposed){const [x,y]=exposed[0].split(',').map(Number);return ['Generalin kırmızı alanda! Generale dokun, sonra güvenli alanda boş bir kareye dokun.','#board',board.point(x,y)];}
-  }
-  if(p.pending||p.reform)return [s.siege?.war?'Savaş başladı. Lazerin içine doğru yerleş veya rakibin dış kenarına saldır.':'Gelişme zamanı. Ordunun kenarındaki boş kareye dokunarak asker yerleştir.','#siege-auto'];
-  return ['Marketten asker alabilirsin. Sahadaki askerine dokunursan 1 dolar alırsın. Generaline dokunup boş bir kare seçerek onu taşırsın.','#siege-market'];
+ if($('siege-use'))return $('siege-use').disabled?cue('Kart beklemede',$('siege-use-note').textContent||'Bu kartın koşulu henüz sağlanmadı.','#close-modal'):cue('Kart elinde','Gücü kullan düğmesine dokun. Kart hedef istiyorsa sonraki adımı haritada göstereceğim.','#siege-use','happy');
+ if(dialog.querySelector('.target-player')){
+  const card=(s.mode==='siege'?SIEGE_POWERS:POWERS).find(c=>c.name===title);
+  const targets=s.players.filter(t=>t.id!==p.id&&!t.eliminated&&!(card?.hostile&&t.shield)&&!(card?.id===11&&t.skipIncome));
+  const score=t=>[3,7,11].includes(card?.id)?t.money:units(s,t.id).length;
+  targets.sort((a,b)=>score(b)-score(a));
+  return targets.length?cue('Rakibini seç',targets[0].name+' bu kart için uygun bir rakip. Portresini ve ordu rengini kontrol edip dokun.','.target-player[data-player="'+CSS.escape(targets[0].id)+'"]','alert'):cue('Kalkanlar açık','Uygun rakip kalmadı. Gücünü sonraki fırsata sakla.','#close-modal');
  }
- if(!mine)return [p.eliminated?'Ordun elendi. Kalan komutanların hamlelerini izleyebilirsin.':'Şimdi rakibin sırası. Sıra sana geçtiğinde ilk hamleni göstereceğim.'];
- if(stage==='placement')return ['Ordun için boş bir 2 × 5 alan seç. İlk kare generalinin yeri.','#board'];
- if(animating||Date.now()<s.revealUntil)return ['Çark durunca sonucu ve yapabileceğin hamleyi burada göreceksin.'];
- if(target)return [$('target-hint').textContent||'Haritada gücün için bir hedef seç.','#board'];
- if(p.lossRemaining)return [p.lossRemaining+' asker kaybın var. Dış kenardan seç veya otomatik kayıp düğmesini kullan.','#auto-loss'];
- if(p.pending||p.reform){
-  const army=units(s,p.id),front=army.some(([,u])=>u.hp)?connected(s,p.id):new Set(army.map(([k])=>k));
-  const mobilePane=matchMedia('(max-width:860px)').matches&&document.body.dataset.pane!=='map';
-  if(mobilePane)return ['Kazandığın askeri yerleştirmek için Harita sekmesine geç.','#mobile-dock [data-pane=map]'];
-  for(const key of front){const [x,y]=key.split(',').map(Number);
-   for(const [nx,ny] of neighbors(x,y)){if(nx<0||ny<0||nx>=50||ny>=50||s.board[nx+','+ny])continue;
-    const pt=board.point(nx,ny);
-    if(document.elementFromPoint(pt.x,pt.y)===$('board'))return ['Gösterilen boş kareye dokun. Ordun kenardan bir kare büyür.','#board',pt];
-   }
-  }
-  return ['Ordunu ekrana ortala, sonra kenarından büyüt.','#focus'];
- }
- if(!p.rolled){
-  if(!(Number($('bet-troops').value)+Number($('bet-money').value)))return ['Kaç askeri riske edeceğini seç. İlk deneme için 1 asker yeterli.','#bet-troops'];
-  return ['Bahsin hazır. Çarkı çevir ve sonucu izle.','#roll'];
- }
- if(s.round>=3&&!seenPower&&Object.values(p.inventory||{}).some(v=>v!==0))return ['Güç çantanı incele. Kartı kullanabilir veya turu bitirebilirsin.','#powers'];
- return ['Hamlen tamam. Sırayı sonraki komutana ver.','#end'];
+ if(title==='Cephanelik')return cue('Cephanelik','Asker takviyesi almak için çağırma düğmesine, bir güç almak için kartının fiyatına dokun.','#recruit-open');
+ if($('recruit-confirm'))return cue('Birliğini hazırla','Asker sayını seç ve alımı onayla.','#recruit-confirm');
+ if(title==='Güç çantası')return dialog.querySelector('[data-power]:not(:disabled)')?cue('Güç çantası','Kullanabildiğin kartı seç. Rakip ya da kare gerekiyorsa birlikte hedef belirleyeceğiz.','[data-power]:not(:disabled)'):cue('Çanta beklemede','Kullanılabilir kart görünmüyor. Sahaya dönüp sıradaki hamleyi inceleyelim.','#close-modal');
+ if($('heal-next'))return cue('Generalini iyileştir','Kullanacağın asker miktarını belirle, sonra iyileştireceğin generale dokun.','#heal-next');
+ return null;
 }
-$('powers').addEventListener('click',()=>{seenPower=true;});
+function reaction(s,p){
+ if(room!==s.code||s.seq<sequence){room=s.code;sequence=s.seq;reply=null;return;}
+ if(s.seq===sequence)return;
+ const recent=(s.events||[]).filter(e=>e.id>sequence);sequence=s.seq;
+ for(const e of recent){
+  if(e.type==='zone'&&e.damaged?.some(([x,y])=>s.board[x+','+y]?.owner===p.id))reply={title:'Lazer vurdu!',mood:'alert'};
+  if(e.player!==p.id)continue;
+  if(e.type==='roll')reply={title:e.value>0?'Çark bizden yana!':'Birlikler geri çekiliyor!',mood:e.value>0?'happy':'alert'};
+  if(['place','recruit','heal','promote','power','hit','move-general'].includes(e.type))
+   reply={title:({place:'Mevzi bizim!',recruit:'Takviye geldi!',heal:'General toparlandı!',promote:'Komutan sahada!',power:'Gücün işledi!',hit:'İsabet!', 'move-general':'Yeni mevzideyiz!'})[e.type],mood:'happy'};
+ }
+ if(reply&&!reply.until)reply.until=performance.now()+1550;
+}
+function write(line){
+ if(lastLine===line)return;
+ lastLine=line;spoken.textContent=line;cancelAnimationFrame(frame);
+ if(media.matches){step.textContent=line;return;}
+ step.textContent='';const start=performance.now(),duration=Math.max(320,Math.min(1050,line.length*12));
+ function reveal(t){
+  const end=Math.ceil(line.length*Math.min(1,(t-start)/duration));
+  step.textContent=line.slice(0,end);
+  if(end<line.length)frame=requestAnimationFrame(reveal);
+ }
+ frame=requestAnimationFrame(reveal);
+}
 function refresh(){
- hand.hidden=true;
- const data=read?.(),stage=document.body.dataset.stage;
- const dialog=document.querySelector('dialog[open]'),title=$('modal-title').textContent;
- const modalAdvice=dialog?.id==='modal'&&(
-  title==='Cephanelik'?['Takviye almak için asker sayısını seç veya aşağıdaki kartlardan birini satın al.','#recruit-open']:
-  title==='Takviye çağır'?['Asker sayısını gir ve takviyeyi onayla.','#recruit-confirm']:
-  title==='Güç çantası'?(document.querySelector('[data-power]:not(:disabled)')?['Kullanılabilir bir güce dokun. Hedef gerekirse sonraki adımda seçersin.','[data-power]:not(:disabled)']:['Şu anda kullanılabilir güç yok. Maça dön.','#close-modal']):
-  dialog.querySelector('.target-player')?['Gücün uygulanacağı rakibi seç.','.target-player']:null);
- panel.hidden=!data?.p||!['draft','placement','playing'].includes(stage)||Boolean(dialog&&!modalAdvice);
- if(panel.hidden)return;
- const parent=modalAdvice?dialog:stage==='draft'?document.querySelector('.draft-wrap'):document.body;
- if(panel.parentNode!==parent){if(modalAdvice)parent.querySelector('.modal-head').after(panel);else if(stage==='draft')parent.prepend(panel);else parent.append(panel);}
- if(hand.parentNode!==(dialog||document.body))(dialog||document.body).append(hand);
- toggle.setAttribute('aria-expanded',String(enabled));body.hidden=!enabled;
- if(!enabled)return;
- let [text,selector,point]=modalAdvice||advice(data);
- let el=selector&&document.querySelector(selector);
- if(el?.closest('#actions')&&matchMedia('(max-width:860px)').matches&&document.body.dataset.pane!=='actions'){
-  text='Hamle sekmesini aç. '+text;el=document.querySelector('#mobile-dock [data-pane=actions]');
+ hand.hidden=true;destination=null;tile=null;
+ const data=read?.(),s=data?.state,stage=document.body.dataset.stage;
+ if(!data?.p||stage!==s?.stage||!['lobby','draft','placement','countdown','playing','ended'].includes(stage)){
+  panel.hidden=true;return;
  }
- if(lesson!==text){$('guide-step').textContent=text;lesson=text;}
- destination=el;find.hidden=true;if(!el)return;
- const r=el.getBoundingClientRect(),x=point?.x??(r.left+r.width*.45),y=point?.y??(r.top+r.height*.5);
- if(!el.contains(document.elementFromPoint(x,y))){find.hidden=!r.width;return;}
- hand.style.left=Math.min(innerWidth-34,Math.max(0,x))+'px';hand.style.top=Math.min(innerHeight-42,Math.max(0,y))+'px';hand.hidden=false;
+ const dialog=document.querySelector('dialog[open]'),mobile=matchMedia('(max-width:860px)').matches;
+ if(mobile&&document.body.dataset.pane==='roster'&&!dialog){panel.hidden=true;return;}
+ const modalAdvice=dialog&&modalLesson(dialog,data);
+ if(dialog&&!modalAdvice){panel.hidden=true;return;}
+ const parent=dialog||(stage==='draft'?document.querySelector('.draft-wrap'):stage==='countdown'?$('countdown'):stage==='lobby'?$('lobby'):document.body);
+ if(panel.parentNode!==parent){
+  if(dialog)dialog.querySelector('.modal-head').after(panel);
+  else if(stage==='draft')parent.prepend(panel);
+  else parent.append(panel);
+ }
+ if(hand.parentNode!==(dialog||document.body))(dialog||document.body).append(hand);
+ panel.hidden=false;body.hidden=!enabled;toggle.setAttribute('aria-expanded',String(enabled));toggle.title=enabled?'Rehberi kapat':'Rehberi aç';toggle.setAttribute('aria-label',toggle.title);
+ toggle.setAttribute('aria-label',toggle.title);panel.classList.toggle('guide-folded',!enabled);
+ if(!enabled)return;
+ reaction(s,data.p);
+ const now=Date.now(),bet=Number($('bet-troops').value)+Number($('bet-money').value)>0;
+ const signature=[data.mine,data.animating,data.picks.join(','),bet,s.revealUntil>now,data.p.cooldowns?.recruit>now,data.p.cooldowns?.general>now].join('|');
+ if(cache?.state!==s||cache?.target!==data.target||cache?.signature!==signature)
+  cache={state:s,target:data.target,signature,advice:guideAdvice(data,{bet},now)};
+ const tip=modalAdvice||cache.advice;
+ const response=tip.mood!=='alert'&&stage==='playing'&&reply?.until>performance.now()?reply:tip;
+ const emotion=response.mood||'calm';
+ if(panel.dataset.emotion!==emotion){panel.dataset.emotion=emotion;face.src='/assets/arena/coach-'+emotion+'.webp';}
+ headline.textContent=response.title;
+ let text=tip.text,el=tip.selector&&document.querySelector(tip.selector);
+ tile=tip.tile||null;
+ if(!dialog&&el&&mobile&&s.mode!=='siege'&&stage==='playing'){
+  const pane=el.closest('#actions')?'actions':el===$('board')?'map':null;
+  if(pane&&pane!==document.body.dataset.pane){
+   el=document.querySelector('#mobile-dock [data-pane='+pane+']');tile=null;
+   text=(pane==='map'?'Harita':'Hamle')+' sekmesini aç. '+text;
+  }
+ }
+ write(text);
+ destination=el;find.hidden=true;if(!el||el.disabled)return;
+ const box=el.getBoundingClientRect();
+ const point=tile?data.board.point(...tile):{x:box.left+box.width*.48,y:box.top+box.height*.5};
+ if(!el.contains(document.elementFromPoint(point.x,point.y))){find.hidden=!box.width;return;}
+ hand.style.left=point.x+'px';hand.style.top=point.y+'px';hand.hidden=false;
 }
-setInterval(refresh,240);
+setInterval(refresh,250);

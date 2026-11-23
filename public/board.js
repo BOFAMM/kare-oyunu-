@@ -1,7 +1,7 @@
 import {drawCharacter,preloadCharacter} from './sprites.js';
 import {THEMES,generalById,teamColor} from './cosmetics.js';
 import {battleImage,FX_DURATION,impact,missileEffect,powerEffect,teleportMotion} from './battle-fx.js';
-import {SIZE,COLORS,project,unproject,xy,key,units,adjacent,inside,dismissalPlan} from './rules.js';
+import {generalDestinations,SIZE,COLORS,project,unproject,xy,key,units,adjacent,inside,dismissalPlan} from './rules.js';
 // Draw in board coordinates so panning, zoom and hit testing share one boundary.
 function siegeBoundary(c,zone,t){
  if(!zone?.war)return;
@@ -277,7 +277,7 @@ export class Board{
   if(this.hoverPlan?.k!==k||this.hoverPlan.target!==this.target||this.hoverPlan.loss!==this.lossMode){
    let ok;
    if(this.lossMode)ok=dismissalPlan(s,this.id,k).ok;
-   else if(this.target==='move-general')ok=!board[k];
+   else if(this.target==='move-general')ok=this.carriedGeneral&&generalDestinations(s,this.id,this.carriedGeneral.x,this.carriedGeneral.y)(x,y);
    else if(this.target==='general')ok=!board[k]&&adjacent(s,this.id,x,y);
    else ok=!!this.target||s.stage==='placement'||own&&(own.pending+own.reform)>0&&board[k]?.owner!==this.id&&adjacent(s,this.id,x,y);
    this.hoverPlan={k,target:this.target,loss:this.lossMode,ok};

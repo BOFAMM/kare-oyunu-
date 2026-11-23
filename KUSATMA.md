@@ -6,7 +6,7 @@ Herkes karargâhının 2 × 5 karelik yerini aynı anda seçer. İki ordu çakı
 
 İlk iki dakika hazırlık süresidir. Her 25 saniyede 20 dolar gelir. Marketten 1 dolara bir asker alıp kendi hattının kenarına koyabilirsin. Otomatik yerleştirme güvenli kareleri tercih eder ve en yakın rakibe doğru ilerler.
 
-Sahadaki kendi normal askerine dokunduğunda asker kalkar ve kasana 1 dolar döner. Generalsiz kaldığında son askerini sahada tutarsın. Generaline dokunduğunda yarı saydam taşıma görünümü açılır. Haritada boş bir kare seçince general o kareye geçer, canını korur. Dolu kare seçersen başka bir hedef deneyebilirsin. Taşıma sırasında eski karedeki general savaş ve lazer hasarı almaya devam eder.
+Sahadaki kendi normal askerine dokunarak onu 1 dolara terhis edebilirsin. Seçtiğin asker iki birliği birbirine bağlayan tek kareyse yerinde kalır. Önce hattın ucundaki askeri terhis edebilir veya ikinci bir bağlantı kurabilirsin. Generalsiz kaldığında son askerini sahada tutarsın. Generaline dokunduğunda yarı saydam taşıma görünümü açılır. Kendi normal askerinin üzerine bırakırsan iki birlik yer değiştirir ve eski kareyi o asker doldurur. Ordunun bağlantısını koruyan boş bir kare seçince general o kareye geçer, canını korur. Dolu kare seçersen başka bir hedef deneyebilirsin. Taşıma sırasında eski karedeki general savaş ve lazer hasarı almaya devam eder.
 
 ## Market ve kartlar
 
