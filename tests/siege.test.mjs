@@ -20,7 +20,7 @@ function fixture(){
 }
 const run=(s,id,a,ms=0)=>act(s,id,a,{now:start+ms,rng});
 test('placement waits for both confirmations, then ten seconds; only money accrues',()=>{
- let s=fixture();assert.equal(s.siege.warAt,start+180000);
+ let s=fixture();assert.equal(s.siege.warAt,start+120000);
  for(const type of ['roll','end','convert','dismiss','haste'])assert.throws(()=>run(s,'a',{type}));
  assert.deepEqual(s.players.map(p=>[p.money,p.pending]),[[80,0],[80,0]]);
  s=tick(s,start+24999);assert.equal(s.players[0].money,80);
@@ -32,12 +32,12 @@ test('concurrent intents do not turn a stale empty-cell click into an attack or 
  for(const p of s.players)p.pending=5;
  s=run(s,'b',move);assert.throws(()=>run(s,'a',move),/değişti/);
  assert.equal(s.players[0].pending,5);assert.equal(s.board['11,10'].owner,'b');
- assert.throws(()=>run(s,'a',{...move,expectedOwner:'b'},179999),/gelişim/);
- s=run(s,'a',{...move,expectedOwner:'b'},180000);assert.equal(s.board['11,10'].owner,'a');
+ assert.throws(()=>run(s,'a',{...move,expectedOwner:'b'},119999),/gelişim/);
+ s=run(s,'a',{...move,expectedOwner:'b'},120000);assert.equal(s.board['11,10'].owner,'a');
 });
 test('siege attacks preserve defenders bridges; general purchase HP equals price; heal only targets generals',()=>{
  let s=fixture();s.players[0].pending=1;s.board['11,10']={owner:'b',hp:0};s.board['11,11']={owner:'b',hp:0};
- assert.throws(()=>run(s,'a',{type:'place',x:11,y:10,expectedOwner:'b'},180000),/bağlı/);
+ assert.throws(()=>run(s,'a',{type:'place',x:11,y:10,expectedOwner:'b'},120000),/bağlı/);
  s=run(s,'a',{type:'general',x:10,y:11});assert.deepEqual(s.board['10,11'],{owner:'a',hp:20});assert.equal(s.players[0].money,60);
  s=run(s,'a',{type:'heal',amount:5,x:10,y:11});assert.equal(s.board['10,11'].hp,25);assert.equal(s.players[0].money,55);
  s=run(s,'a',{type:'place',x:9,y:10,expectedOwner:null});
@@ -45,11 +45,11 @@ test('siege attacks preserve defenders bridges; general purchase HP equals price
 });
 test('poison grants one ring of grace, kills troops and doubles general damage per exposure',()=>{
  let s=fixture();s.board['0,5']={owner:'a',hp:0};s.board['1,5']={owner:'a',hp:0};s.board['0,6']={owner:'a',hp:12};
- s=tick(s,start+180000,rng);assert.equal(s.siege.war,true);assert.equal(s.siege.inset,0);
- s=tick(s,start+225000,rng);assert.ok(s.board['0,5']);assert.equal(s.board['0,6'].hp,12);
- s=tick(s,start+270000,rng);assert.ok(s.board['0,5']);assert.ok(s.board['1,5']);assert.equal(s.board['0,6'].hp,7);
- s=tick(s,start+315000,rng);assert.equal(s.board['1,5'],undefined);assert.equal(s.board['0,6'],undefined);
- assert.throws(()=>run(s,'a',{type:'general',x:0,y:6},315000),/Lazer/);
+ s=tick(s,start+120000,rng);assert.equal(s.siege.war,true);assert.equal(s.siege.inset,0);
+ s=tick(s,start+165000,rng);assert.ok(s.board['0,5']);assert.equal(s.board['0,6'].hp,12);
+ s=tick(s,start+210000,rng);assert.ok(s.board['0,5']);assert.ok(s.board['1,5']);assert.equal(s.board['0,6'].hp,7);
+ s=tick(s,start+255000,rng);assert.equal(s.board['1,5'],undefined);assert.equal(s.board['0,6'],undefined);
+ assert.throws(()=>run(s,'a',{type:'general',x:0,y:6},255000),/Lazer/);
 });
 test('all seven siege cards can be granted, bought and used with their mode-specific targets',()=>{
  for(const card of SIEGE_POWERS){
@@ -57,21 +57,21 @@ test('all seven siege cards can be granted, bought and used with their mode-spec
   s=run(s,'a',{type:'buy',power:card.id});assert.equal(s.players[0].inventory[card.id],card.uses,card.name);
   s.board['10,11']={owner:'a',hp:0};s.board['12,11']={owner:'b',hp:0};
   const move={type:'power',power:card.id,target:'b',x:card.id===6?15:12,y:10};
-  if(card.hostile)assert.throws(()=>run(s,'a',move),/gelişim/);
-  s=run(s,'a',move,180000);
+  if(card.hostile)assert.throws(()=>run(s,'a',move,40000),/gelişim/);
+  s=run(s,'a',move,120000);
   assert.equal(s.players[0].inventory[card.id],card.uses===-1?-1:card.uses-1,card.name);
  }
 });
 test('asymmetric boundaries stay nested; eliminated general blocks attacks, replacement permits them',()=>{
  let s=fixture();s.players[0].pending=3;s.board['10,10'].hp=0;s.board['11,10']={owner:'b',hp:0};
  const move={type:'place',x:11,y:10,expectedOwner:'b'};
- assert.throws(()=>run(s,'a',move,180000),/general/);
- s=run(s,'a',{type:'general',x:9,y:10},180000);
- assert.equal(run(s,'a',move,180000).board['11,10'].owner,'a');
- s=tick(s,start+225000,()=>.99);
+ assert.throws(()=>run(s,'a',move,120000),/general/);
+ s=run(s,'a',{type:'general',x:9,y:10},120000);
+ assert.equal(run(s,'a',move,120000).board['11,10'].owner,'a');
+ s=tick(s,start+165000,()=>.99);
  assert.deepEqual(s.siege.bounds,{left:2,right:49,top:2,bottom:49});
  assert.deepEqual(SIEGE_POWERS.map(p=>p.id),[4,5,7,10,11,12,14]);
- for(const id of [1,2,3,6,8,9,13,15])assert.throws(()=>run(s,'a',{type:'buy',power:id},225000));
+ for(const id of [1,2,3,6,8,9,13,15])assert.throws(()=>run(s,'a',{type:'buy',power:id},165000));
 });
 test('center eventually becomes toxic; simultaneous wipe draws and rematch keeps mode',()=>{
  let s=fixture();s.board={'24,24':{owner:'a',hp:10},'25,25':{owner:'b',hp:10}};
@@ -94,9 +94,9 @@ test('final poison cannot be stalled with healing, steel heart or renewable pois
 test('poison preserves the bridge to a living general and the connected front can expand',()=>{
  let s=fixture();
  s.players[0].pending=2;s.board={'1,9':{owner:'a',hp:0},'0,9':{owner:'a',hp:0},'0,10':{owner:'a',hp:0},'0,11':{owner:'a',hp:0},'1,11':{owner:'a',hp:10},'20,20':{owner:'b',hp:10}};
- s=tick(s,start+270000,rng);
- assert.ok(s.board['0,10']);s=run(s,'a',{type:'place',x:2,y:9,expectedOwner:null},270000);
- s=run(s,'a',{type:'place',x:2,y:11,expectedOwner:null},270000);
+ s=tick(s,start+210000,rng);
+ assert.ok(s.board['0,10']);s=run(s,'a',{type:'place',x:2,y:9,expectedOwner:null},210000);
+ s=run(s,'a',{type:'place',x:2,y:11,expectedOwner:null},210000);
  assert.equal(s.board['2,11'].owner,'a');
 });
 
@@ -104,8 +104,35 @@ test('100 HP general holds a poisoned bridge until lethal fifth strike',()=>{
  let s=fixture();s.board={'20,20':{owner:'b',hp:10},'0,15':{owner:'a',hp:100}};
  for(let x=1;x<=12;x++)s.board[x+',15']={owner:'a',hp:0};
  for(const [i,hp] of [95,85,65,25,0].entries()){
-  s=tick(s,start+270000+i*45000,rng);
+  s=tick(s,start+210000+i*45000,rng);
   assert.equal(s.board['0,15']?.hp||0,hp);
   assert.equal(Boolean(s.board['1,15']),hp>0);
  }
+});
+
+test('redeploy is atomic; sale licence and card timers are enforced',()=>{
+ let s=fixture();s.players[0].money=200;s.board['10,11']={owner:'a',hp:0};
+ s=run(s,'a',{type:'move-troop',x:10,y:11,toX:9,toY:10});
+ assert.ok(s.board['9,10']);assert.ok(!s.board['10,11']);
+ s=run(s,'a',{type:'unlock-sale'});assert.equal(s.players[0].money,100);
+ const sell={type:'sell-troop',x:9,y:10};assert.throws(()=>run(s,'a',sell,39999));
+ s=run(s,'a',sell,40000);assert.equal(s.players[0].soldTroops,1);
+ const cash=s.players[0].money;s=run(s,'a',{type:'restore-troop',x:10,y:9},40000);
+ assert.equal(s.players[0].money,cash-1);assert.equal(s.players[0].soldTroops,0);
+ s=run(s,'a',{type:'buy',power:14},40000);assert.throws(()=>run(s,'a',{type:'power',power:14},79999));
+ s=run(s,'a',{type:'power',power:14},80000);assert.ok(s.players[0].shield);
+});
+test('active immunity cannot stop laser damage',()=>{
+ let s=fixture();s.board['0,10']={owner:'a',hp:100};
+ s=tick(s,start+165000,rng);s.players[0].inventory[14]=1;
+ s=run(s,'a',{type:'power',power:14},209000);
+ s=tick(s,start+210000,rng);assert.equal(s.board['0,10'].hp,95);
+});
+
+test('a blocked frontline can wear down its exposed flank without annexing a red cell',()=>{
+ let s=tick(fixture(),start+165000,rng);s.players[0].pending=3;
+ s.board={'1,9':{owner:'a',hp:10},'0,10':{owner:'b',hp:0},'1,10':{owner:'b',hp:0},'2,10':{owner:'b',hp:10}};
+ const old=s.players[0].pending;s=run(s,'a',{type:'place',x:1,y:10,expectedOwner:'b'},165000);
+ assert.ok(!s.board['0,10']);assert.equal(s.board['1,10'].owner,'b');assert.equal(s.players[0].pending,old-1);
+ assert.ok(s.events.at(-1).flank);
 });

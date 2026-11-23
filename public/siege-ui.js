@@ -12,12 +12,12 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
   select(siege?'siege':'classic');document.body.dataset.selection=siege?'siege':'classic';
   $('mode-siege').setAttribute('aria-pressed',String(siege));$('mode-classic').setAttribute('aria-pressed',String(!siege));
   $('quick-play').querySelector('strong').textContent=siege?'Kuşatmaya gir':'Meydana çık';
-  document.querySelector('.camp-facts span:nth-child(2)').lastChild.textContent=siege?'3 dk hazırlık':'45 sn / hamle';
+  document.querySelector('.camp-facts span:nth-child(2)').lastChild.textContent=siege?'2 dk hazırlık':'45 sn / hamle';
  }
  $('mode-siege').onclick=()=>mode(true);$('mode-classic').onclick=()=>mode(false);
  function sync(now){if(Number.isFinite(now))offset=now-Date.now();}
  function rules(){
-  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından üç dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Lazer 45 saniyede bir farklı bir odağa doğru daralır. İki daralma dışarıda kalan asker ölür. Generalin orduya bağlantı hattı korunur. General ilk zehir isabetinde 5 can kaybeder; sonraki isabetler 10, 20, 40 diye büyür.</li></ol>');
+  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından iki dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Lazer 45 saniyede bir farklı bir odağa doğru daralır. İki daralma dışarıda kalan asker ölür. Generalin orduya bağlantı hattı korunur. General ilk zehir isabetinde 5 can kaybeder; sonraki isabetler 10, 20, 40 diye büyür.</li></ol>');
  }
  let lastSecond=-1,stage='',notice='';
  function alarm(title,detail){
@@ -63,7 +63,7 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
   }
   if(!playing){wasWar=null;handKey='';$('siege-general-warning').hidden=true;if(s.stage!=='countdown')lastSecond=-1;clock();return;}
   if(room!==s.code){room=s.code;wasWar=null;handKey='';}
-  if(prior==='countdown'&&!s.siege.war)alarm('Savaş başladı!','I · HAZIRLIK · 3 dakika · Saldırılar kapalı');
+  if(prior==='countdown'&&!s.siege.war)alarm('Savaş başladı!','I · HAZIRLIK · 2 dakika · Saldırılar kapalı');
   if(s.siege.war&&wasWar===false)alarm('Savaş başladı!','II · ÇARPIŞMA · Saldırılar açıldı · Lazer 45 saniyede daralır');
   wasWar=s.siege.war;
   const army=units(s,id),generals=army.filter(([,u])=>u.hp>0).length;
@@ -78,6 +78,7 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
    handKey=signature;
    $('siege-hand').innerHTML=hand.map(c=>'<button class="siege-hand-card" data-card="'+c.id+'" aria-label="'+esc(c.name)+', '+(p.inventory[c.id]<0?'sınırsız':p.inventory[c.id])+' kullanım">'+pic('card-'+c.id)+'<span>'+esc(c.name)+'</span><b>'+(p.inventory[c.id]<0?'∞':p.inventory[c.id])+'</b></button>').join('')||'<small class="siege-empty">Kart almak için markete dokun.</small>';
   }
+  if(view.startsWith('card:')&&$('siege-use')){const card=SIEGE_POWERS.find(c=>c.id===Number(view.slice(5))),reason=powerBlocked(card);$('siege-use').disabled=!!reason;$('siege-use-note').textContent=reason||'';}
   if(view==='market'&&$('modal').open)prices();
   clock();
  }
@@ -86,6 +87,8 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
   for(const b of $('modal-body').querySelectorAll('[data-price]')){
    const price=b.id==='siege-buy-general'?(count+1)*10:Number(b.dataset.price);
    b.disabled=p.eliminated||s.siege.inset>=25||p.money<price||(b.id==='siege-heal'&&count===0);
+   if(b.dataset.buy){const seconds=Math.ceil(((p.cooldowns?.[b.dataset.buy]||0)-Date.now()-offset)/1000);if(seconds>0)b.disabled=true;b.textContent=seconds>0?seconds+' sn':price+' $ · Satın al';}
+   if(b.id==='siege-sale'&&p.saleUnlocked)b.disabled=true;
    if(b.id==='siege-buy-general')b.querySelector('small').textContent=price+' $ · '+price+' can';
   }
   const cash=$('siege-wallet');if(cash)cash.textContent=p.money+' $';
@@ -93,8 +96,11 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
  function shop(){
   const {s,p}=read();if(p.eliminated||s.stage!=='playing')return;
   const item=(id,img,name,label,price)=>'<button id="'+id+'" data-price="'+price+'">'+pic(img)+'<span>'+name+'<small>'+label+'</small></span></button>';
-  modal('Saha marketi','<p class="siege-wallet">'+pic('cash')+' Kasa <b id="siege-wallet"></b></p><div class="siege-market-grid">'+item('siege-buy-general','general','General çağır','',10)+item('siege-heal','general','General iyileştir','1 $ / can',1)+item('siege-recruit','soldier','Asker al','1 $ / asker',1)+'</div><h3>Güç kartları</h3><div class="siege-catalog">'+SIEGE_POWERS.map(c=>'<article>'+pic('card-'+c.id)+'<div><h3>'+esc(c.name)+'</h3><p>'+esc(c.desc)+'</p><button data-buy="'+c.id+'" data-price="'+c.price+'">'+c.price+' $ · Satın al</button></div></article>').join('')+'</div>');
+  modal('Saha marketi','<p class="siege-wallet">'+pic('cash')+' Kasa <b id="siege-wallet"></b></p><div class="siege-market-grid">'+item('siege-move','soldier','Asker düzenle','Sahadaki askeri taşı',0)+item('siege-sale','cash',p.saleUnlocked?'Terhis yetkisi açık':'Terhis yetkisi','1 asker ↔ 1 $ · Yetki 100 dolar',p.saleUnlocked?0:100)+(p.soldTroops?item('siege-recall','soldier','Geri çağır',p.soldTroops+' terhisli · 1 $ / asker',1):'')+item('siege-buy-general','general','General çağır','',10)+item('siege-heal','general','General iyileştir','1 $ / can',1)+item('siege-recruit','soldier','Asker al','1 $ / asker',1)+'</div><h3>Güç kartları</h3><div class="siege-catalog">'+SIEGE_POWERS.map(c=>'<article>'+pic('card-'+c.id)+'<div><h3>'+esc(c.name)+'</h3><p>'+esc(c.desc)+'</p><button data-buy="'+c.id+'" data-price="'+c.price+'">'+c.price+' $ · Satın al</button></div></article>').join('')+'</div>');
   view='market';prices();
+  $('siege-move').onclick=()=>setTarget({type:'move-source'},'Taşımak istediğin kendi normal askerini seç.');
+  $('siege-sale').onclick=async()=>{if(await command({type:'unlock-sale'})){shop();toast('Terhis yetkisi 40 saniye sonra hazır.');}};
+  if($('siege-recall'))$('siege-recall').onclick=()=>setTarget({type:'restore-troop'},'1 dolar karşılığı geri çağırmak için boş ve bağlı kareyi seç.');
   $('siege-buy-general').onclick=()=>setTarget({type:'general'},'General için orduna bağlı boş kareyi seç.');
   $('siege-recruit').onclick=()=>quantity(false);$('siege-heal').onclick=()=>quantity(true);
   for(const b of $('modal-body').querySelectorAll('[data-buy]'))b.onclick=async()=>{b.disabled=true;if(await command({type:'buy',power:Number(b.dataset.buy)}))toast('Kart satın alındı.');prices();};
@@ -112,8 +118,8 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
  $('siege-orders').onclick=()=>modal('Sahadaki ordular',summary());
  $('siege-auto').onclick=()=>command({type:'auto-place'});
  $('siege-hand').onclick=e=>{
-  const b=e.target.closest('[data-card]');if(!b)return;const c=SIEGE_POWERS.find(c=>c.id===Number(b.dataset.card));if(c.hostile&&blockAttack())return;const reason=powerBlocked(c);view='';
-  modal(c.name,'<div class="siege-card-detail">'+pic('card-'+c.id)+'<div><p>'+esc(c.desc)+'</p><button id="siege-use" class="primary" '+(reason?'disabled':'')+'>Gücü kullan</button>'+(reason?'<p>'+esc(reason)+'</p>':'')+'</div></div>');
+  const b=e.target.closest('[data-card]');if(!b)return;const c=SIEGE_POWERS.find(c=>c.id===Number(b.dataset.card));if(c.hostile&&blockAttack())return;const reason=powerBlocked(c);view='card:'+c.id;
+  modal(c.name,'<div class="siege-card-detail">'+pic('card-'+c.id)+'<div><p>'+esc(c.desc)+'</p><button id="siege-use" class="primary" '+(reason?'disabled':'')+'>Gücü kullan</button>'+('<p id="siege-use-note">'+esc(reason||'')+'</p>')+'</div></div>');
   $('siege-use').onclick=()=>activate(c.id);
  };
  $('modal').addEventListener('close',()=>{view='';});

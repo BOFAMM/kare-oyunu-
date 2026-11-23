@@ -69,7 +69,7 @@ export const server=http.createServer(async(req,res)=>{try{
     if(restored.mode==='siege'&&restored.siege){
      const shift=now-saved.at;
      for(const field of ['start','warAt','nextIncome','nextShrink'])if(Number.isFinite(restored.siege[field]))restored.siege[field]+=shift;
-     for(const player of restored.players)for(const field of ['nextTroop','shieldUntil','botNext'])if(player[field])player[field]+=shift;
+     for(const player of restored.players){for(const field of ['nextTroop','shieldUntil','botNext','saleReady'])if(player[field])player[field]+=shift;for(const card of Object.keys(player.cooldowns||{}))player.cooldowns[card]+=shift;}
     }
     restored.deadline=now+Math.max(1000,restored.deadline-saved.at);
     restored.revealUntil=0;restored.updated=now;restored.seq=Math.max(restored.seq,s.seq);

@@ -91,7 +91,7 @@ function dismiss(s,p,k){
 function finishLoss(s,p){while(p.lossRemaining>0){const candidate=units(s,p.id).find(([k])=>dismissalPlan(s,p.id,k).ok);need(candidate,'Asker kaybı tamamlanamadı; geçerli silme karesi bulunamadı.');dismiss(s,p,candidate[0]);}}
 // Remove only non-articulation cells; protected generals may require retaining their connecting soldiers.
 function remove(s,id,n,rng,candidates=units(s,id).filter(([,u])=>!u.hp).map(([k])=>k),allowGeneral=false){let removed=0;const pool=shuffled(candidates,rng);while(removed<n){const index=pool.findIndex(k=>s.board[k]?.owner===id&&(allowGeneral||!s.board[k].hp)&&canRemove(s,id,k));if(index<0)break;delete s.board[pool.splice(index,1)[0]];removed++;}return removed;}
-function hostile(s,p,target){if(s.mode==='siege'){need(units(s,p.id).some(([,u])=>u.hp),'Saldırı için general çağır.');need(s.siege.war,'Üç dakikalık gelişim aşaması henüz bitmedi.');}else need(s.round>5,'İlk 5 tur barış var. Savaş 6. turda açılır.');need(!target.shield,'Rakip dokunulmazlıkla korunuyor.');}
+function hostile(s,p,target){if(s.mode==='siege'){need(units(s,p.id).some(([,u])=>u.hp),'Saldırı için general çağır.');need(s.siege.war,'İki dakikalık gelişim aşaması henüz bitmedi.');}else need(s.round>5,'İlk 5 tur barış var. Savaş 6. turda açılır.');need(!target.shield,'Rakip dokunulmazlıkla korunuyor.');}
 function autoPlace(s,p){
  const limit=Math.min(100,p.pending+p.reform);
  need(limit>0,'Yerleştirecek askerin yok.');
@@ -106,7 +106,24 @@ function autoPlace(s,p){
  need(count>0,'Ordunun kenarında yerleşecek boş kare yok.');
  event(s,'place',{...last,player:p.id,count});
 }
-function place(s,p,x,y,notify=true){need(inside(x,y),'Ada dışında bir kare seçtin.');need(p.pending+p.reform>0,'Yerleştirecek askerin yok.');need(adjacent(s,p.id,x,y),'Generaline bağlı bölgenin kenarına yerleştir. Köşegen sayılmaz.');const k=key(x,y),u=s.board[k];need(u?.owner!==p.id,'Bu kare zaten senin.');if(u){hostile(s,p,player(s,u.owner));need(p.pending>0,'Yeniden dizilim askerleri saldırıda harcanamaz; yeni asker hakkı gerekir.');if(u.hp>1){u.hp--;p.pending--;event(s,'hit',{x,y,player:p.id});return;}need(canRemove(s,u.owner,k),'Bu kare rakibin topraklarını bağlı tutuyor. Önce dış kenarlara saldır.');}s.board[k]={owner:p.id,hp:0};if(!u&&p.reform)p.reform--;else p.pending--;if(notify)event(s,u?'hit':'place',{x,y,player:p.id,capture:Boolean(u)});if(u)eliminate(s);}
+function exposedFlank(s,owner,front){
+ if(s.mode!=='siege'||!s.siege?.war||!s.siege.inset)return null;
+ const cells=[front],seen=new Set(cells),red=[],inside=[];
+ for(let i=0;i<cells.length;i++){
+  const k=cells[i],coords=xy(k);
+  (safeSiegeCell(s,...coords)?inside:red).push(k);
+  for(const [x,y] of neighbors(...coords)){
+   const n=key(x,y);if(!seen.has(n)&&s.board[n]?.owner===owner){seen.add(n);cells.push(n);}
+  }
+ }
+ if(!red.length)return null;
+ return [...red,...inside].find(k=>s.board[k].hp>1||canRemove(s,owner,k));
+}
+function place(s,p,x,y,notify=true){need(inside(x,y),'Ada dışında bir kare seçtin.');need(p.pending+p.reform>0,'Yerleştirecek askerin yok.');need(adjacent(s,p.id,x,y),'Generaline bağlı bölgenin kenarına yerleştir. Köşegen sayılmaz.');const k=key(x,y),u=s.board[k];need(u?.owner!==p.id,'Bu kare zaten senin.');if(u){hostile(s,p,player(s,u.owner));need(p.pending>0,'Yeniden dizilim askerleri saldırıda harcanamaz; yeni asker hakkı gerekir.');if(u.hp>1){u.hp--;p.pending--;event(s,'hit',{x,y,player:p.id});return;}if(s.mode==='siege'&&(!safeSiegeCell(s,x,y)||!canRemove(s,u.owner,k))){
+ const flank=exposedFlank(s,u.owner,k);need(flank,'Bu kare rakibin topraklarını bağlı tutuyor.');
+ const victim=s.board[flank];if(victim.hp>1)victim.hp--;else delete s.board[flank];
+ const [fx,fy]=xy(flank);p.pending--;event(s,'hit',{x:fx,y:fy,player:p.id,flank:true});log(s,'Kuşatma darbesi · Savunma hattı uçtan yıpratıldı.');eliminate(s);return;
+ }need(canRemove(s,u.owner,k),'Bu kare rakibin topraklarını bağlı tutuyor. Önce dış kenarlara saldır.');}s.board[k]={owner:p.id,hp:0};if(!u&&p.reform)p.reform--;else p.pending--;if(notify)event(s,u?'hit':'place',{x,y,player:p.id,capture:Boolean(u)});if(u)eliminate(s);}
 function use(s,p,a,rng,now){const before=structuredClone(s.board), army=units(s,p.id), sourceKey=(army.find(([,u])=>u.hp)||army[0])?.[0];const balance=p.money;const siege=s.mode==='siege';const pow=(siege?SIEGE_POWERS:POWERS).find(x=>x.id===a.power);need(pow,'Bilinmeyen güç.');need(siege||s.round>=3,'Güçler 3. turda açılır.');need(!locked(s,p),'Kasa kilidi sırasında güç kullanamazsın.');need(p.inventory[pow.id]!==0&&p.inventory[pow.id]!==undefined,'Bu güçten kullanım hakkın yok.');let t;if(pow.target==='player'){t=player(s,a.target);need(t!==p&&!t.eliminated,'Hayattaki bir rakibi seç.');}if(pow.hostile){hostile(s,p,t||{shield:false});}if(pow.target==='cell')need(inside(a.x,a.y),'Haritadan geçerli hedef seç.');
  if([2,6].includes(pow.id)){restoreReform(s,p);if(t)restoreReform(s,t);}
  switch(pow.id){
@@ -139,12 +156,33 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random,forcedRoll}={}){c
  else if(siege&&a.type==='ready'){need(s.stage==='placement'&&p.spawn,'Önce başlangıç yerini seç.');p.ready=true;if(s.players.every(q=>q.ready))countdown(s,now);}
  else if(a.type==='setup'){need(s.stage==='placement'&&current(s).id===id,'Yerleşim sırası sende değil.');need(inside(a.x,a.y)&&inside(a.x+1,a.y+4),'2×5 dizilim ada içinde olmalı.');for(let y=0;y<5;y++)for(let x=0;x<2;x++)need(!s.board[key(a.x+x,a.y+y)],'Dizilim başka bir oyuncuyla çakışıyor.');form(s,p,a.x,a.y);s.cursor++;s.deadline=now+90000;if(s.cursor===s.order.length){s.cursor=0;countdown(s,now);}}
  else {need(s.stage==='playing'&&!p.eliminated,'Oyun hamle aşamasında değil.');if(siege){
-  need(['place','auto-place','heal','general','power','buy','recruit'].includes(a.type),'Bu işlem Kuşatma modunda kullanılamaz.');
+  need(['place','auto-place','heal','general','power','buy','recruit','move-troop','unlock-sale','sell-troop','restore-troop'].includes(a.type),'Bu işlem Kuşatma modunda kullanılamaz.');
   need(s.siege.inset<SIZE/2,'Güvenli alan kalmadı. Son zehir darbeleri maçı belirleyecek.');
-  if(['place','general'].includes(a.type))need(safeSiegeCell(s,a.x,a.y),'Lazerin içinde bir kare seç.');
+  if(a.type==='general'||(a.type==='place'&&!s.board[key(a.x,a.y)]))need(safeSiegeCell(s,a.x,a.y),'Lazerin içinde bir kare seç.');
   if(a.type==='place')need(a.expectedOwner===(s.board[key(a.x,a.y)]?.owner??null),'Bu kare değişti. Askerin korunuyor; hedefi tekrar seç.');
  }else{need(current(s).id===id,'Sıra sende değil.');need(now<s.deadline,'Hamle süresi doldu.');need(now>=(s.revealUntil||0),'Zar sonucu gösteriliyor; animasyonun bitmesini bekle.');need(!p.lossRemaining||['dismiss','auto-dismiss','end'].includes(a.type),'Önce eksi çarpanın gerektirdiği askerleri sil.');}
  switch(a.type){
+ case 'unlock-sale':
+  need(siege&&!p.saleUnlocked&&p.money>=100,'Terhis yetkisi 100 $ karşılığı bir kez açılır.');p.money-=100;p.saleUnlocked=true;p.saleReady=now+40000;break;
+ case 'move-troop':case 'sell-troop':{
+  const k=key(a.x,a.y),unit=s.board[k];
+  need(siege&&inside(a.x,a.y)&&unit?.owner===id&&!unit.hp,'Kendi normal askerini seç.');
+  need(units(s,id).length>1&&canRemove(s,id,k),'Bu asker ordunun bağlantısını veya son karesini koruyor.');
+  delete s.board[k];
+  if(a.type==='sell-troop'){
+   need(p.saleUnlocked&&now>=p.saleReady,'Terhis yetkisini aç ve 40 saniyelik hazırlığı bekle.');
+   p.money++;p.soldTroops=(p.soldTroops||0)+1;
+  }else{
+   need(inside(a.toX,a.toY)&&safeSiegeCell(s,a.toX,a.toY)&&!s.board[key(a.toX,a.toY)]&&adjacent(s,id,a.toX,a.toY),'Bağlı, boş ve güvenli bir hedef seç.');
+   s.board[key(a.toX,a.toY)]=unit;
+  }
+  break;
+ }
+ case 'restore-troop':{
+  need(siege&&p.saleUnlocked&&p.soldTroops>0&&p.money>=1,'Geri çağırmak için 1 $ ve terhis edilmiş bir asker gerekir.');
+  need(inside(a.x,a.y)&&safeSiegeCell(s,a.x,a.y)&&!s.board[key(a.x,a.y)]&&adjacent(s,id,a.x,a.y),'Bağlı, boş ve güvenli bir hedef seç.');
+  p.soldTroops--;p.money--;s.board[key(a.x,a.y)]={owner:id,hp:0};event(s,'place',{x:a.x,y:a.y,player:id});break;
+ }
  case 'roll':{need(!p.rolled,'Bu hamlede zaten zar attın.');need(!p.reform,'Zardan önce yeniden dizilimi tamamla.');need(integer(a.money,0,p.money)&&integer(a.troops,0,units(s,id).length),'Bahis mevcut dolar ve asker miktarını aşamaz.');need(a.money+a.troops>0,'En az bir birim bahis seç.');need(!a.money||!locked(s,p),'Kasa kilitli; yalnızca asker bahsi yapabilirsin.');const test=ODDS.some(o=>o.v===forcedRoll),value=test?forcedRoll:face(rng());p.rolled=true;let gain=0,lostMoney=0,lostTroops=0;if(value>0){gain=(a.money+a.troops)*value*(p.double?2:1);p.pending+=gain;}else if(!p.lucky){lostMoney=Math.min(p.money,a.money*-value);p.money-=lostMoney;lostTroops=Math.min(a.troops*-value,units(s,id).filter(([,u])=>!u.hp).length);p.lossRemaining=lostTroops;}s.revealUntil=now+ROLL_REVEAL_MS;s.deadline+=ROLL_REVEAL_MS;s.roll={id:s.seq+1,player:id,value,gain,lostMoney,lostTroops,test};event(s,'roll',s.roll);log(s,p.name+' '+multiplierLabel(value)+' attı. '+(test?'[Yönetici testi] ':'')+(gain?gain+' asker kazandı.':lostTroops+' asker seçilecek, '+lostMoney+'$ kayıp.'));break;}
  case 'dismiss':need(inside(a.x,a.y),'Ada dışında bir kare seçtin.');dismiss(s,p,key(a.x,a.y));break;
  case 'auto-dismiss':finishLoss(s,p);break;
@@ -154,8 +192,8 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random,forcedRoll}={}){c
  case 'recruit':need(!locked(s,p),'Kasa kilitli.');need(integer(a.amount,1,p.money),'Yeterli dolar yok.');p.money-=a.amount;p.pending+=a.amount;event(s,'recruit',{player:id,amount:a.amount});break;
  case 'heal':{const u=s.board[key(a.x,a.y)];need(u?.owner===id&&u.hp>0,'Kendi generalini seç.');const resource=siege?'money':'pending';need(integer(a.amount,1,p[resource]),siege?'Yeterli dolar yok.':'Yeterli kazanılmış asker yok.');u.hp+=a.amount;p[resource]-=a.amount;event(s,'heal',{x:a.x,y:a.y,player:id,amount:a.amount});break;}
  case 'general':{need(siege||units(s,id).some(([,u])=>u.hp),'Generalin kalmadığı için yeni general alamazsın.');need(!locked(s,p),'Kasa kilitli.');const u=s.board[key(a.x,a.y)],cost=(units(s,id).filter(([,v])=>v.hp).length+1)*10;need(integer(a.x,0,SIZE-1)&&integer(a.y,0,SIZE-1),'Geçersiz kare.');need(!u&&adjacent(s,id,a.x,a.y),'Orduna kenardan bağlı boş bir kare seç.');need(p.money>=cost,'General için '+cost+'$ gerekiyor.');p.money-=cost;s.board[key(a.x,a.y)]={owner:id,hp:siege?cost:p.generalHP};event(s,'promote',{x:a.x,y:a.y,player:p.id});break;}
- case 'buy':{const pow=(siege?SIEGE_POWERS:POWERS).find(x=>x.id===a.power);need(pow,'Güç bulunamadı.');need(!locked(s,p),'Kasa kilitli.');need(p.money>=pow.price,'Yeterli dolar yok.');need(pow.id!==15||p.inventory[15]!==-1,'Bu güce zaten sahipsin.');need(pow.id!==10||p.generalHP!==20,'Çelik yürek zaten etkin.');p.money-=pow.price;grant(s,p,pow.id);event(s,'buy',{player:id,power:pow.id});if(!siege&&[1,10].includes(pow.id)){const general=units(s,p.id).find(([,u])=>u.hp);event(s,'power',{power:pow.id,player:p.id,source:general?xy(general[0]):null});}break;}
- case 'power':use(s,p,a,rng,now);break;
+ case 'buy':{if(siege){p.cooldowns??={};need(!(p.cooldowns[a.power]>now),'Bu kart hazırlanıyor.');p.cooldowns[a.power]=now+40000;}const pow=(siege?SIEGE_POWERS:POWERS).find(x=>x.id===a.power);need(pow,'Güç bulunamadı.');need(!locked(s,p),'Kasa kilitli.');need(p.money>=pow.price,'Yeterli dolar yok.');need(pow.id!==15||p.inventory[15]!==-1,'Bu güce zaten sahipsin.');need(pow.id!==10||p.generalHP!==20,'Çelik yürek zaten etkin.');p.money-=pow.price;grant(s,p,pow.id);event(s,'buy',{player:id,power:pow.id});if(!siege&&[1,10].includes(pow.id)){const general=units(s,p.id).find(([,u])=>u.hp);event(s,'power',{power:pow.id,player:p.id,source:general?xy(general[0]):null});}break;}
+ case 'power':if(siege)need(!(p.cooldowns?.[a.power]>now),'Bu kart hazırlanıyor.');use(s,p,a,rng,now);if(siege){p.cooldowns??={};p.cooldowns[a.power]=now+40000;}break;
  case 'end':endTurn(s,now);break;
  default:throw Error('Bilinmeyen hamle.');
  }}if(state.stage==='playing'&&a.type!=='rematch'){
@@ -261,7 +299,7 @@ function siegeBotStep(state,now,rng){
   const cells=new Map(),sources=hasGeneral?connected(s,p.id):army.map(([k])=>k);
   for(const k of sources)for(const [x,y] of neighbors(...xy(k))){
    const dest=key(x,y),u=s.board[dest];
-   if(!safeSiegeCell(s,x,y)||u&&(u.owner===p.id||!s.siege.war||player(s,u.owner).shield))continue;
+   if((!safeSiegeCell(s,x,y)&&!u)||u&&(u.owner===p.id||!s.siege.war||player(s,u.owner).shield))continue;
    cells.set(dest,{x,y,owner:u?.owner??null,hp:u?.hp||0});
   }
   const options=shuffled([...cells.values()],rng);
@@ -270,7 +308,7 @@ function siegeBotStep(state,now,rng){
    const home=options.find(c=>!c.owner);
    if(home){s=act(s,p.id,{type:'general',x:home.x,y:home.y},{now,rng});player(s,p.id).botNext=now+1800;continue;}
   }
-  const choice=options.filter(c=>!c.owner||hasGeneral).find(c=>!c.owner||c.hp>1||canRemove(s,c.owner,key(c.x,c.y)));
+  const choice=options.filter(c=>!c.owner||hasGeneral).find(c=>!c.owner||c.hp>1||canRemove(s,c.owner,key(c.x,c.y))||exposedFlank(s,c.owner,key(c.x,c.y)));
   if(choice&&bot.pending)s=act(s,p.id,{type:'place',x:choice.x,y:choice.y,expectedOwner:choice.owner},{now,rng});
   else if(s===state)s=structuredClone(s);
   player(s,p.id).botNext=now+1800;
