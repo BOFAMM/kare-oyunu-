@@ -17,8 +17,13 @@ function advice({state:s,p,mine,target,picks,board,animating}){
  if(s.mode==='siege'&&stage==='playing'){
   if(p.eliminated)return ['Ordun elendi. Mücadeleyi haritadan takip edebilirsin.'];
   if(target)return [$('target-hint').textContent||'Haritada hedefini seç.','#board'];
+  const b=s.siege?.bounds;
+  if(s.siege?.war&&b){
+   const exposed=Object.entries(s.board).find(([k,u])=>{if(u.owner!==p.id||!u.hp)return false;const [x,y]=k.split(',').map(Number);return x<b.left||x>b.right||y<b.top||y>b.bottom;});
+   if(exposed){const [x,y]=exposed[0].split(',').map(Number);return ['Generalin kırmızı alanda! Generale dokun, sonra güvenli alanda boş bir kareye dokun.','#board',board.point(x,y)];}
+  }
   if(p.pending||p.reform)return [s.siege?.war?'Savaş başladı. Lazerin içine doğru yerleş veya rakibin dış kenarına saldır.':'Gelişme zamanı. Ordunun kenarındaki boş kareye dokunarak asker yerleştir.','#siege-auto'];
-  return ['25 saniyede 20 dolar gelir. Marketten asker satın al, ardından haritada yerleştir.','#siege-market'];
+  return ['Marketten asker alabilirsin. Sahadaki askerine dokunursan 1 dolar alırsın. Generaline dokunup boş bir kare seçerek onu taşırsın.','#siege-market'];
  }
  if(!mine)return [p.eliminated?'Ordun elendi. Kalan komutanların hamlelerini izleyebilirsin.':'Şimdi rakibin sırası. Sıra sana geçtiğinde ilk hamleni göstereceğim.'];
  if(stage==='placement')return ['Ordun için boş bir 2 × 5 alan seç. İlk kare generalinin yeri.','#board'];

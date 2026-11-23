@@ -1,5 +1,5 @@
 // Player-facing values use touch controls. The private administrator form keeps its own inputs.
-const eligible='input#code,input#name,input[type=number]';
+const eligible='input#code,input[type=number]';
 function prepare(root){
  for(const input of root.querySelectorAll(eligible)){
   if(input.closest('#admin-dialog'))continue;
@@ -14,20 +14,20 @@ const pad=document.createElement('dialog');
 pad.setAttribute('aria-label','Değer seçimi');
 document.body.append(pad);
 function openPad(input){
- const name=input.id==='name',code=input.id==='code',numeric=!name&&!code;
+ const code=input.id==='code';
  let value=input.value;
  pad.replaceChildren();
- const title=document.createElement('h2');title.textContent=name?'Komutan adı':code?'Oda kodu':'Miktar seç';pad.append(title);
+ const title=document.createElement('h2');title.textContent=code?'Oda kodu':'Miktar seç';pad.append(title);
  const current=document.createElement('output');current.style.cssText='display:block;font-size:24px;margin:12px 0';pad.append(current);
- const keys=document.createElement('div');keys.style.cssText='display:grid;grid-template-columns:repeat('+ (name?7:3)+',1fr);gap:4px';pad.append(keys);
+ const keys=document.createElement('div');keys.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:4px';pad.append(keys);
  function button(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>{fn();draw()};keys.append(b);return b;}
  function draw(){current.textContent=value||'—';done.disabled=code?value.length!==6:!value.length;}
- if(numeric){
+ if(!code){
   const min=Number(input.min||0),max=input.max?Number(input.max):1000000;
   for(const delta of [-10,-1,1,10,50])button((delta>0?'+':'')+delta,()=>value=String(Math.max(min,Math.min(max,Number(value)+delta))));
   button('Tümü',()=>value=String(max));
  }else{
-  for(const k of name?'ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ0123456789':'1234567890')button(k,()=>{if(value.length<input.maxLength)value+=k});
+  for(const k of '1234567890')button(k,()=>{if(value.length<input.maxLength)value+=k});
   button('Sil',()=>value=value.slice(0,-1));button('Temizle',()=>value='');
  }
  function close(){pad.close();input.focus();}

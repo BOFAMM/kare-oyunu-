@@ -29,6 +29,9 @@ test('two HTTP clients racing for a cell spend one unit, retain the losing order
   const winner=replies[0].ok?'a':'b',loser=winner==='a'?'b':'a';
   const state=(await (await fetch(base+'/api/state',{headers:{Authorization:'Bearer '+loser}})).json()).state;
   assert.equal(state.board['21,20'].owner,winner);
+  const poll=revision=>fetch(base+'/api/state?since='+revision,{headers:{Authorization:'Bearer '+loser}}).then(r=>r.json());
+  const same=await poll(state.revision);assert.equal(same.unchanged,true);assert.equal(same.state,undefined);
+  const newer=await poll(state.revision-1);assert.equal(newer.state.revision,state.revision);
   assert.equal(state.players.find(p=>p.id===winner).pending,4);assert.equal(state.players.find(p=>p.id===loser).pending,5);
   assert.equal((await place(loser,loser==='a'?19:23,20)).status,200);
  }finally{

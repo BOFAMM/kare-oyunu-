@@ -97,6 +97,7 @@ function autoPlace(s,p){
  need(limit>0,'Yerleştirecek askerin yok.');
  const own=units(s,p.id);
  const frontier=own.some(([,u])=>u.hp)?connected(s,p.id):new Set(own.map(([k])=>k));
+ if(s.mode==='siege')return autoPlaceSiege(s,p,frontier,limit);
  let count=0,last;
  outer:for(const from of frontier)for(const [x,y] of neighbors(...xy(from))){
   if(s.board[key(x,y)]||(s.mode==='siege'&&!safeSiegeCell(s,x,y)))continue;
@@ -105,6 +106,54 @@ function autoPlace(s,p){
  }
  need(count>0,'Ordunun kenarında yerleşecek boş kare yok.');
  event(s,'place',{...last,player:p.id,count});
+}
+// Two sweeps give the Manhattan distance to the closest enemy for every square.
+function siegeEnemyDistances(board,owner){
+ const distance=new Uint8Array(SIZE*SIZE).fill(SIZE*2);
+ for(const [k,u] of Object.entries(board))if(u.owner!==owner){
+  const [x,y]=xy(k);distance[y*SIZE+x]=0;
+ }
+ for(let i=0;i<distance.length;i++){
+  if(i%SIZE)distance[i]=Math.min(distance[i],distance[i-1]+1);
+  if(i>=SIZE)distance[i]=Math.min(distance[i],distance[i-SIZE]+1);
+ }
+ for(let i=distance.length-1;i>=0;i--){
+  if(i%SIZE<SIZE-1)distance[i]=Math.min(distance[i],distance[i+1]+1);
+  if(i+SIZE<distance.length)distance[i]=Math.min(distance[i],distance[i+SIZE]+1);
+ }
+ return distance;
+}
+function siegeExposure(bounds,x,y){
+ return Math.max(0,bounds.left-x,x-bounds.right)+Math.max(0,bounds.top-y,y-bounds.bottom);
+}
+function autoPlaceSiege(s,p,sources,limit){
+ const distance=siegeEnemyDistances(s.board,p.id), candidates=new Map(),visited=new Set();
+ const b=s.siege.bounds;
+ function extend(first){
+  const queue=[first];visited.add(first);
+  for(let i=0;i<queue.length;i++)for(const [x,y] of neighbors(...xy(queue[i]))){
+   const k=key(x,y),unit=s.board[k];
+   if(!unit){
+    const score=siegeExposure(b,x,y)*SIZE*2+distance[y*SIZE+x];
+    candidates.set(k,score);
+   }else if(unit.owner===p.id&&!visited.has(k)){
+    visited.add(k);queue.push(k);
+   }
+  }
+ }
+ for(const k of sources)if(!visited.has(k))extend(k);
+ let count=0,last;
+ while(count<limit&&candidates.size){
+  let choice,best=Infinity;
+  for(const [k,score] of candidates)if(score<best){choice=k;best=score;}
+  candidates.delete(choice);
+  // Each candidate was reached by a four-way edge from the deployable army.
+  s.board[choice]={owner:p.id,hp:0};
+  if(p.reform)p.reform--;else p.pending--;
+  last=xy(choice);count++;extend(choice);
+ }
+ need(count>0,'Ordunun kenarında yerleşecek boş kare yok.');
+ event(s,'place',{x:last[0],y:last[1],player:p.id,count});
 }
 function exposedFlank(s,owner,front){
  if(s.mode!=='siege'||!s.siege?.war||!s.siege.inset)return null;
@@ -119,7 +168,7 @@ function exposedFlank(s,owner,front){
  if(!red.length)return null;
  return [...red,...inside].find(k=>s.board[k].hp>1||canRemove(s,owner,k));
 }
-function place(s,p,x,y,notify=true){need(inside(x,y),'Ada dışında bir kare seçtin.');need(p.pending+p.reform>0,'Yerleştirecek askerin yok.');need(adjacent(s,p.id,x,y),'Generaline bağlı bölgenin kenarına yerleştir. Köşegen sayılmaz.');const k=key(x,y),u=s.board[k];need(u?.owner!==p.id,'Bu kare zaten senin.');if(u){hostile(s,p,player(s,u.owner));need(p.pending>0,'Yeniden dizilim askerleri saldırıda harcanamaz; yeni asker hakkı gerekir.');if(u.hp>1){u.hp--;p.pending--;event(s,'hit',{x,y,player:p.id});return;}if(s.mode==='siege'&&(!safeSiegeCell(s,x,y)||!canRemove(s,u.owner,k))){
+function place(s,p,x,y,notify=true){need(inside(x,y),'Ada dışında bir kare seçtin.');need(p.pending+p.reform>0,'Yerleştirecek askerin yok.');need(adjacent(s,p.id,x,y),'Generaline bağlı bölgenin kenarına yerleştir. Köşegen sayılmaz.');const k=key(x,y),u=s.board[k];need(u?.owner!==p.id,'Bu kare zaten senin.');if(u){hostile(s,p,player(s,u.owner));need(p.pending>0,'Yeniden dizilim askerleri saldırıda harcanamaz; yeni asker hakkı gerekir.');if(u.hp>1){u.hp--;p.pending--;event(s,'hit',{x,y,player:p.id});return;}if(s.mode==='siege'&&!canRemove(s,u.owner,k)){
  const flank=exposedFlank(s,u.owner,k);need(flank,'Bu kare rakibin topraklarını bağlı tutuyor.');
  const victim=s.board[flank];if(victim.hp>1)victim.hp--;else delete s.board[flank];
  const [fx,fy]=xy(flank);p.pending--;event(s,'hit',{x:fx,y:fy,player:p.id,flank:true});log(s,'Kuşatma darbesi · Savunma hattı uçtan yıpratıldı.');eliminate(s);return;
@@ -130,7 +179,7 @@ function use(s,p,a,rng,now){const before=structuredClone(s.board), army=units(s,
  case 1:if(siege)p.pending+=4;else p.money+=30;break;
  case 2:for(const u of Object.values(s.board)){if(u.owner===p.id)u.owner=t.id;else if(u.owner===t.id)u.owner=p.id;}break;
  case 3:[p.money,t.money]=[t.money,p.money];break;
- case 4:remove(s,t.id,Math.floor(units(s,t.id).filter(([,u])=>!u.hp).length/2),rng);break;
+ case 4:if(siege&&t.mask){t.mask=false;event(s,'mask',{player:t.id});break;}remove(s,t.id,Math.floor(units(s,t.id).filter(([,u])=>!u.hp).length/2),rng);break;
  case 5:{const targets=new Map();for(const [k,u]of Object.entries(s.board)){const [x,y]=xy(k);if(Math.abs(x-a.x)<=1&&Math.abs(y-a.y)<=1&&!player(s,u.owner).shield&&!(u.owner===p.id&&u.hp)){if(u.hp>1)u.hp-=1;else{if(u.hp)u.hp=1;if(!targets.has(u.owner))targets.set(u.owner,[]);targets.get(u.owner).push(k);}}}for(const [owner,keys]of targets){remove(s,owner,keys.length,rng,keys,true);}event(s,'missile',{x:a.x,y:a.y,player:p.id});eliminate(s);break;}
  case 6:{const own=units(s,p.id),anchor=xy((own.find(([,u])=>u.hp)||own[0])[0]),dx=a.x-anchor[0],dy=a.y-anchor[1];const moved=own.map(([k,u])=>{const [x,y]=xy(k);need(inside(x+dx,y+dy),'Dizilimin bir kısmı ada dışına taşıyor.');if(siege)need(safeSiegeCell(s,x+dx,y+dy),'Işınlanma hedefi güvenli bölgenin dışında.');const dest=key(x+dx,y+dy);need(!s.board[dest]||s.board[dest].owner===p.id,'Hedefte rakip var; ışınlanma iptal.');return [dest,u];});for(const [k]of own)delete s.board[k];for(const [k,u]of moved)s.board[k]=u;event(s,'teleport',{x:a.x,y:a.y,player:p.id,source:anchor,formation:own.map(([k,u])=>[...xy(k),u.hp])});break;}
  case 7:{const amount=Math.floor(t.money/4);t.money-=amount;p.money+=amount;p.pending+=remove(s,t.id,Math.floor(units(s,t.id).length/4),rng);break;}
@@ -156,32 +205,29 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random,forcedRoll}={}){c
  else if(siege&&a.type==='ready'){need(s.stage==='placement'&&p.spawn,'Önce başlangıç yerini seç.');p.ready=true;if(s.players.every(q=>q.ready))countdown(s,now);}
  else if(a.type==='setup'){need(s.stage==='placement'&&current(s).id===id,'Yerleşim sırası sende değil.');need(inside(a.x,a.y)&&inside(a.x+1,a.y+4),'2×5 dizilim ada içinde olmalı.');for(let y=0;y<5;y++)for(let x=0;x<2;x++)need(!s.board[key(a.x+x,a.y+y)],'Dizilim başka bir oyuncuyla çakışıyor.');form(s,p,a.x,a.y);s.cursor++;s.deadline=now+90000;if(s.cursor===s.order.length){s.cursor=0;countdown(s,now);}}
  else {need(s.stage==='playing'&&!p.eliminated,'Oyun hamle aşamasında değil.');if(siege){
-  need(['place','auto-place','heal','general','power','buy','recruit','move-troop','unlock-sale','sell-troop','restore-troop'].includes(a.type),'Bu işlem Kuşatma modunda kullanılamaz.');
+  need(['place','auto-place','heal','general','power','buy','recruit','move-general','sell-troop'].includes(a.type),'Bu işlem Kuşatma modunda kullanılamaz.');
   need(s.siege.inset<SIZE/2,'Güvenli alan kalmadı. Son zehir darbeleri maçı belirleyecek.');
-  if(a.type==='general'||(a.type==='place'&&!s.board[key(a.x,a.y)]))need(safeSiegeCell(s,a.x,a.y),'Lazerin içinde bir kare seç.');
+  const product=a.type==='buy'?a.power:['recruit','heal','general'].includes(a.type)?a.type:null;
+  if(product!==null){
+   p.cooldowns??={};need(!(p.cooldowns[product]>now),'Aynı ürünü tekrar almak için 30 saniye bekle.');
+   p.cooldowns[product]=now+SIEGE.repurchaseMs;
+  }
   if(a.type==='place')need(a.expectedOwner===(s.board[key(a.x,a.y)]?.owner??null),'Bu kare değişti. Askerin korunuyor; hedefi tekrar seç.');
  }else{need(current(s).id===id,'Sıra sende değil.');need(now<s.deadline,'Hamle süresi doldu.');need(now>=(s.revealUntil||0),'Zar sonucu gösteriliyor; animasyonun bitmesini bekle.');need(!p.lossRemaining||['dismiss','auto-dismiss','end'].includes(a.type),'Önce eksi çarpanın gerektirdiği askerleri sil.');}
  switch(a.type){
- case 'unlock-sale':
-  need(siege&&!p.saleUnlocked&&p.money>=100,'Terhis yetkisi 100 $ karşılığı bir kez açılır.');p.money-=100;p.saleUnlocked=true;p.saleReady=now+40000;break;
- case 'move-troop':case 'sell-troop':{
+ case 'sell-troop':{
   const k=key(a.x,a.y),unit=s.board[k];
   need(siege&&inside(a.x,a.y)&&unit?.owner===id&&!unit.hp,'Kendi normal askerini seç.');
-  need(units(s,id).length>1&&canRemove(s,id,k),'Bu asker ordunun bağlantısını veya son karesini koruyor.');
-  delete s.board[k];
-  if(a.type==='sell-troop'){
-   need(p.saleUnlocked&&now>=p.saleReady,'Terhis yetkisini aç ve 40 saniyelik hazırlığı bekle.');
-   p.money++;p.soldTroops=(p.soldTroops||0)+1;
-  }else{
-   need(inside(a.toX,a.toY)&&safeSiegeCell(s,a.toX,a.toY)&&!s.board[key(a.toX,a.toY)]&&adjacent(s,id,a.toX,a.toY),'Bağlı, boş ve güvenli bir hedef seç.');
-   s.board[key(a.toX,a.toY)]=unit;
-  }
-  break;
+  need(units(s,id).length>1,'Son birliğini terhis edemezsin.');
+  delete s.board[k];p.money++;event(s,'sell-troop',{x:a.x,y:a.y,player:id});break;
  }
- case 'restore-troop':{
-  need(siege&&p.saleUnlocked&&p.soldTroops>0&&p.money>=1,'Geri çağırmak için 1 $ ve terhis edilmiş bir asker gerekir.');
-  need(inside(a.x,a.y)&&safeSiegeCell(s,a.x,a.y)&&!s.board[key(a.x,a.y)]&&adjacent(s,id,a.x,a.y),'Bağlı, boş ve güvenli bir hedef seç.');
-  p.soldTroops--;p.money--;s.board[key(a.x,a.y)]={owner:id,hp:0};event(s,'place',{x:a.x,y:a.y,player:id});break;
+ case 'move-general':{
+  const source=key(a.x,a.y),destination=key(a.toX,a.toY),general=s.board[source];
+  need(siege&&inside(a.x,a.y)&&general?.owner===id&&general.hp>0,'Kendi generalini seç.');
+  need(inside(a.toX,a.toY)&&!s.board[destination],'Generalin için boş bir kare seç.');
+  delete s.board[source];s.board[destination]=general;
+  if(safeSiegeCell(s,a.toX,a.toY))delete general.zoneDamage;
+  event(s,'move-general',{player:id,fromX:a.x,fromY:a.y,x:a.toX,y:a.toY});break;
  }
  case 'roll':{need(!p.rolled,'Bu hamlede zaten zar attın.');need(!p.reform,'Zardan önce yeniden dizilimi tamamla.');need(integer(a.money,0,p.money)&&integer(a.troops,0,units(s,id).length),'Bahis mevcut dolar ve asker miktarını aşamaz.');need(a.money+a.troops>0,'En az bir birim bahis seç.');need(!a.money||!locked(s,p),'Kasa kilitli; yalnızca asker bahsi yapabilirsin.');const test=ODDS.some(o=>o.v===forcedRoll),value=test?forcedRoll:face(rng());p.rolled=true;let gain=0,lostMoney=0,lostTroops=0;if(value>0){gain=(a.money+a.troops)*value*(p.double?2:1);p.pending+=gain;}else if(!p.lucky){lostMoney=Math.min(p.money,a.money*-value);p.money-=lostMoney;lostTroops=Math.min(a.troops*-value,units(s,id).filter(([,u])=>!u.hp).length);p.lossRemaining=lostTroops;}s.revealUntil=now+ROLL_REVEAL_MS;s.deadline+=ROLL_REVEAL_MS;s.roll={id:s.seq+1,player:id,value,gain,lostMoney,lostTroops,test};event(s,'roll',s.roll);log(s,p.name+' '+multiplierLabel(value)+' attı. '+(test?'[Yönetici testi] ':'')+(gain?gain+' asker kazandı.':lostTroops+' asker seçilecek, '+lostMoney+'$ kayıp.'));break;}
  case 'dismiss':need(inside(a.x,a.y),'Ada dışında bir kare seçtin.');dismiss(s,p,key(a.x,a.y));break;
@@ -192,8 +238,8 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random,forcedRoll}={}){c
  case 'recruit':need(!locked(s,p),'Kasa kilitli.');need(integer(a.amount,1,p.money),'Yeterli dolar yok.');p.money-=a.amount;p.pending+=a.amount;event(s,'recruit',{player:id,amount:a.amount});break;
  case 'heal':{const u=s.board[key(a.x,a.y)];need(u?.owner===id&&u.hp>0,'Kendi generalini seç.');const resource=siege?'money':'pending';need(integer(a.amount,1,p[resource]),siege?'Yeterli dolar yok.':'Yeterli kazanılmış asker yok.');u.hp+=a.amount;p[resource]-=a.amount;event(s,'heal',{x:a.x,y:a.y,player:id,amount:a.amount});break;}
  case 'general':{need(siege||units(s,id).some(([,u])=>u.hp),'Generalin kalmadığı için yeni general alamazsın.');need(!locked(s,p),'Kasa kilitli.');const u=s.board[key(a.x,a.y)],cost=(units(s,id).filter(([,v])=>v.hp).length+1)*10;need(integer(a.x,0,SIZE-1)&&integer(a.y,0,SIZE-1),'Geçersiz kare.');need(!u&&adjacent(s,id,a.x,a.y),'Orduna kenardan bağlı boş bir kare seç.');need(p.money>=cost,'General için '+cost+'$ gerekiyor.');p.money-=cost;s.board[key(a.x,a.y)]={owner:id,hp:siege?cost:p.generalHP};event(s,'promote',{x:a.x,y:a.y,player:p.id});break;}
- case 'buy':{if(siege){p.cooldowns??={};need(!(p.cooldowns[a.power]>now),'Bu kart hazırlanıyor.');p.cooldowns[a.power]=now+40000;}const pow=(siege?SIEGE_POWERS:POWERS).find(x=>x.id===a.power);need(pow,'Güç bulunamadı.');need(!locked(s,p),'Kasa kilitli.');need(p.money>=pow.price,'Yeterli dolar yok.');need(pow.id!==15||p.inventory[15]!==-1,'Bu güce zaten sahipsin.');need(pow.id!==10||p.generalHP!==20,'Çelik yürek zaten etkin.');p.money-=pow.price;grant(s,p,pow.id);event(s,'buy',{player:id,power:pow.id});if(!siege&&[1,10].includes(pow.id)){const general=units(s,p.id).find(([,u])=>u.hp);event(s,'power',{power:pow.id,player:p.id,source:general?xy(general[0]):null});}break;}
- case 'power':if(siege)need(!(p.cooldowns?.[a.power]>now),'Bu kart hazırlanıyor.');use(s,p,a,rng,now);if(siege){p.cooldowns??={};p.cooldowns[a.power]=now+40000;}break;
+ case 'buy':{const pow=(siege?SIEGE_POWERS:POWERS).find(x=>x.id===a.power);need(pow,'Güç bulunamadı.');need(!locked(s,p),'Kasa kilitli.');need(p.money>=pow.price,'Yeterli dolar yok.');need(pow.id!==15||p.inventory[15]!==-1,'Bu güce zaten sahipsin.');need(pow.id!==10||p.generalHP!==20,'Çelik yürek zaten etkin.');p.money-=pow.price;grant(s,p,pow.id);event(s,'buy',{player:id,power:pow.id});if(!siege&&[1,10].includes(pow.id)){const general=units(s,p.id).find(([,u])=>u.hp);event(s,'power',{power:pow.id,player:p.id,source:general?xy(general[0]):null});}break;}
+ case 'power':use(s,p,a,rng,now);break;
  case 'end':endTurn(s,now);break;
  default:throw Error('Bilinmeyen hamle.');
  }}if(state.stage==='playing'&&a.type!=='rematch'){
@@ -203,15 +249,22 @@ export function act(state,id,a,{now=Date.now(),rng=Math.random,forcedRoll}={}){c
  for(const [k,u]of Object.entries(state.board)){const v=s.board[k];if(u.owner!==id){if(v?.owner===id&&a.type==='place')stats.captures++;if(a.type==='place'||a.type==='power'&&a.power===5){const damage=u.hp?Math.max(0,u.hp-(v?.owner===u.owner?v.hp:0)):(!v||v.owner!==u.owner?1:0);if(damage&&!(s.players.find(q=>q.id===u.owner)?.eliminated&&!u.hp))stats.damage+=damage;}}}
  }if(s.stage==='playing'){eliminate(s);if(!siege&&s.stage==='playing'&&current(s)?.eliminated)endTurn(s,now);}s.updated=now;return s;
 }
-export function tick(state,now=Date.now(),rng=Math.random){if(state.mode==='siege'&&state.stage==='placement')return state;if(state.mode==='siege'&&state.stage==='playing')return siegeTick(state,now,rng);if(now<state.deadline||['lobby','ended'].includes(state.stage))return state;let s=structuredClone(state);if(s.stage==='draft'){for(const p of s.players)if(!p.chosen){p.offers.slice(0,2).forEach(x=>grant(s,p,x));p.chosen=true;}prepare(s,now,rng);}else if(s.stage==='placement'){const p=current(s);outer:for(let y=15;y<45;y++)for(let x=15;x<45;x++){let ok=true;for(let dy=0;dy<5;dy++)for(let dx=0;dx<2;dx++)if(s.board[key(x+dx,y+dy)])ok=false;if(ok){s=act(s,p.id,{type:'setup',x,y},{now,rng});break outer;}}}else if(s.stage==='countdown'){s.stage='playing';if(s.mode==='siege')startSiege(s,now);else beginTurn(s,now);}else endTurn(s,now);s.updated=now;return s;}
+export function tick(state,now=Date.now(),rng=Math.random){if(state.mode==='siege'&&state.stage==='placement')return state;if(state.mode==='siege'&&state.stage==='playing')return siegeTick(state,now,rng);if(now<state.deadline||['lobby','ended'].includes(state.stage))return state;let s=structuredClone(state);if(s.stage==='draft'){for(const p of s.players)if(!p.chosen){p.offers.slice(0,2).forEach(x=>grant(s,p,x));p.chosen=true;}prepare(s,now,rng);}else if(s.stage==='placement'){const p=current(s);outer:for(let y=15;y<45;y++)for(let x=15;x<45;x++){let ok=true;for(let dy=0;dy<5;dy++)for(let dx=0;dx<2;dx++)if(s.board[key(x+dx,y+dy)])ok=false;if(ok){s=act(s,p.id,{type:'setup',x,y},{now,rng});break outer;}}}else if(s.stage==='countdown'){s.stage='playing';if(s.mode==='siege')startSiege(s,now,rng);else beginTurn(s,now);}else endTurn(s,now);s.updated=now;return s;}
 export function botStep(s,now=Date.now(),rng=Math.random,forcedRoll){if(s.mode==='siege'&&s.stage==='playing')return siegeBotStep(s,now,rng);const p=current(s);if(!p?.bot)return s;if(s.stage==='placement')return tick({...s,deadline:now},now,rng);if(s.stage!=='playing'||now<(s.revealUntil||0))return s;let a;
  if(!p.rolled&&!p.reform)a={type:'roll',troops:Math.max(1,Math.ceil(units(s,p.id).length*.35)),money:locked(s,p)?0:Math.min(p.money,3)};
  else if(p.lossRemaining>0){const candidate=units(s,p.id).find(([k])=>dismissalPlan(s,p.id,k).ok);need(candidate,'Bot için silinebilecek kare bulunamadı.');const [x,y]=xy(candidate[0]);a={type:'dismiss',x,y};}
  else if(p.pending+p.reform>0){let candidates=[];for(const [k]of units(s,p.id))for(const [x,y]of neighbors(...xy(k))){const u=s.board[key(x,y)];if(!u||u.owner!==p.id&&s.round>5&&!player(s,u.owner).shield&&p.pending>0)candidates.push([x,y,u]);}const enemy=Object.entries(s.board).filter(([,u])=>u.owner!==p.id&&u.hp);candidates=shuffled(candidates,rng).sort((a,b)=>{const score=c=>c[2]?-100:Math.min(100,...enemy.map(([k])=>{const [x,y]=xy(k);return Math.abs(x-c[0])+Math.abs(y-c[1]);}));return score(a)-score(b);});const target=candidates.find(([x,y,u])=>adjacent(s,p.id,x,y)&&(!u||u.hp>1||canRemove(s,u.owner,key(x,y))));a=target?{type:'place',x:target[0],y:target[1]}:{type:'end'};}
  else a={type:'end'};return act(s,p.id,a,{now,rng,forcedRoll});}
-function startSiege(s,now){
+function chooseSiegeFocus(rng,bounds){
+ const {left,top,right,bottom}=bounds;
+ if(rng()<.25)return {x:rng()<.5?left:right,y:rng()<.5?top:bottom};
+ return {x:left+Math.floor(rng()*(right-left+1)),y:top+Math.floor(rng()*(bottom-top+1))};
+}
+function startSiege(s,now,rng){
  const warAt=now+SIEGE.peaceMs;
  s.siege={start:now,warAt,nextIncome:now+SIEGE.incomeMs,nextShrink:warAt+SIEGE.shrinkMs,war:false,inset:0,bounds:{left:0,top:0,right:SIZE-1,bottom:SIZE-1}};
+ s.siege.focus=chooseSiegeFocus(rng,s.siege.bounds);
+ s.siege.marketVersion=2;
  for(const p of s.players){
   p.pending=SIEGE.startTroops;p.money=SIEGE.startMoney;
  }
@@ -228,44 +281,26 @@ function paySiege(s,until){
   if(p.shield&&p.shieldUntil<=until)p.shield=false;
  }
 }
+function nextSiegeBounds(bounds,focus){
+ const width=bounds.right-bounds.left-1;
+ const nextEdge=(edge,target)=>Math.min(edge+2,Math.max(edge,target-Math.floor((width-1)/2)));
+ const left=nextEdge(bounds.left,focus.x),top=nextEdge(bounds.top,focus.y);
+ return {left,top,right:left+width-1,bottom:top+width-1};
+}
 function pulseZone(s,rng){
- const zone=s.siege,oldInset=zone.inset;
- const prev=zone.bounds||{left:oldInset,right:SIZE-1-oldInset,top:oldInset,bottom:SIZE-1-oldInset};
- if(oldInset<SIZE/2){
-  const dx=Math.floor(rng()*3),dy=Math.floor(rng()*3);
-  zone.bounds={left:prev.left+dx,right:prev.right-(2-dx),top:prev.top+dy,bottom:prev.bottom-(2-dy)};
+ const zone=s.siege,prev=zone.bounds;
+ if(zone.inset<SIZE/2){
+  zone.focus??=chooseSiegeFocus(rng,prev);
+  zone.bounds=nextSiegeBounds(prev,zone.focus);zone.inset++;
  }
- zone.inset=Math.min(SIZE/2,oldInset+1);
- const removed=[],damaged=[],masks=new Set(),doomed=new Set();
+ const removed=[],damaged=[];
  for(const [k,u] of Object.entries(s.board)){
   const [x,y]=xy(k);
-  if(x>=prev.left&&x<=prev.right&&y>=prev.top&&y<=prev.bottom&&oldInset<SIZE/2)continue;
-  const owner=player(s,u.owner);
-  if(owner.mask){masks.add(owner);continue;}
-  if(!u.hp){doomed.add(k);continue;}
+  if(safeSiegeCell(s,x,y)){delete u.zoneDamage;continue;}
   const damage=u.zoneDamage||5;
   if(u.hp>damage){u.hp-=damage;u.zoneDamage=damage*2;damaged.push([x,y]);}
   else{delete s.board[k];removed.push([x,y]);}
  }
- // Keep a connected backbone from each surviving general to all surviving land in its component.
- const visited=new Set();
- for(const [root,general] of Object.entries(s.board)){
-  if(!general.hp||visited.has(root))continue;
-  const path=new Map(),queue=[root];visited.add(root);
-  for(let i=0;i<queue.length;i++){
-   const k=queue[i];
-   for(const [x,y] of neighbors(...xy(k))){
-    const n=key(x,y);
-    if(visited.has(n)||s.board[n]?.owner!==general.owner)continue;
-    visited.add(n);path.set(n,k);queue.push(n);
-   }
-  }
-  for(let i=queue.length-1;i>0;i--){
-   const k=queue[i];if(!doomed.has(k))doomed.delete(path.get(k));
-  }
- }
- for(const k of doomed){delete s.board[k];removed.push(xy(k));}
- for(const p of masks)p.mask=false;
  for(const p of s.players)if(!units(s,p.id).length)p.reform=0;
  event(s,'zone',{inset:zone.inset,removed,damaged});eliminate(s);
 }
@@ -288,30 +323,117 @@ function safeSiegeCell(s,x,y){
  const b=s.siege.bounds;if(b)return x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom;
  const n=s.siege.inset;return x>=n&&y>=n&&x<SIZE-n&&y<SIZE-n;
 }
+function siegeMissileTarget(s,p,opponents){
+ const scores=new Int16Array(SIZE*SIZE);
+ // Accumulate splash value once per occupied cell, accounting for friendly fire.
+ for(const [k,u] of Object.entries(s.board)){
+  const self=u.owner===p.id,enemy=opponents.get(u.owner);
+  if(self&&(u.hp||p.shield)||!self&&(!enemy||enemy.shield))continue;
+  const [x,y]=xy(k),value=self?-3:u.hp===1?5:u.hp?2:1;
+  for(let j=Math.max(0,y-1);j<=Math.min(SIZE-1,y+1);j++)
+   for(let i=Math.max(0,x-1);i<=Math.min(SIZE-1,x+1);i++)scores[j*SIZE+i]+=value;
+ }
+ let best=0;for(let i=1;i<scores.length;i++)if(scores[i]>scores[best])best=i;
+ return {x:best%SIZE,y:Math.floor(best/SIZE),value:scores[best]};
+}
+function siegeBotPower(s,p,army,generals,opponents,enemyDistance,now){
+ if(!s.siege.war||!generals.length)return null;
+ const choices=[];
+ function consider(power,value,target={}){
+  const owned=(p.inventory[power]||0)>0;
+  const price=SIEGE_POWERS.find(card=>card.id===power).price;
+  if(!owned&&(p.cooldowns?.[power]>now||p.money-price<12||value<7))return;
+  if(value>0)choices.push({value:owned?value:value*.55,action:owned?{type:'power',power,...target}:{type:'buy',power}});
+ }
+ const troops=new Map();
+ for(const u of Object.values(s.board))if(!u.hp)troops.set(u.owner,(troops.get(u.owner)||0)+1);
+ for(const enemy of opponents.values()){
+  if(enemy.shield)continue;
+  const count=troops.get(enemy.id)||0;
+  if(count>=2&&!enemy.mask)consider(4,Math.floor(count/2),{target:enemy.id});
+  if(count>=4||enemy.money>=8)consider(7,Math.floor(count/4)+Math.floor(enemy.money/4)*.55,{target:enemy.id});
+  if(!enemy.skipIncome&&s.siege.nextIncome-now<9000)consider(11,enemy.money<25?8:4,{target:enemy.id});
+ }
+ if(p.inventory[5]>0||p.money>=57){
+  const {x,y,value}=siegeMissileTarget(s,p,opponents);
+  if(value>=2)consider(5,value,{x,y});
+ }
+ if(!p.shield&&generals.some(([k])=>{const [x,y]=xy(k);return enemyDistance[y*SIZE+x]<=2;}))consider(14,10);
+ if(generals.some(([,u])=>u.hp<=6))consider(10,12);
+ if(!p.mask&&army.length-generals.length>=8)consider(12,5);
+ choices.sort((a,b)=>b.value-a.value);
+ return choices[0]?.action;
+}
+function siegeBotDecision(s,p,now){
+ const army=units(s,p.id),generals=army.filter(([,u])=>u.hp);
+ const opponents=new Map(s.players.filter(q=>q.id!==p.id&&!q.eliminated).map(q=>[q.id,q]));
+ const zone=s.siege,b=zone.bounds,distance=siegeEnemyDistances(s.board,p.id);
+ const focus=zone.focus||{x:(b.left+b.right)/2,y:(b.top+b.bottom)/2};
+ const toward=(x,y)=>Math.abs(x-focus.x)+Math.abs(y-focus.y);
+ const sources=generals.length?connected(s,p.id):new Set(army.map(([k])=>k));
+ const cells=new Map();
+ for(const k of sources)for(const [x,y] of neighbors(...xy(k))){
+  const cell=key(x,y),unit=s.board[cell];
+  if(unit?.owner===p.id||cells.has(cell))continue;
+  const exposure=siegeExposure(b,x,y);
+  const score=exposure*SIZE*4+toward(x,y)*(zone.war?1.25:.45)+distance[y*SIZE+x];
+  cells.set(cell,{x,y,unit,score});
+ }
+ const vacancies=[...cells.values()].filter(c=>!c.unit).sort((a,b)=>a.score-b.score);
+ if(!generals.length&&vacancies.length&&p.money>=10&&!(p.cooldowns?.general>now)){
+  const {x,y}=vacancies[0];return {type:'general',x,y};
+ }
+ // When the next pulse is imminent, evacuate before it can kill a weakened general.
+ let refuge=b;
+ if(zone.war&&zone.nextShrink-now<=4500&&zone.focus&&b.right-b.left>=3)
+  refuge=nextSiegeBounds(b,focus);
+ const endangered=generals.find(([k])=>siegeExposure(refuge,...xy(k))>0);
+ if(endangered){
+  let best=null,bestScore=Infinity;
+  for(let y=refuge.top;y<=refuge.bottom;y++)for(let x=refuge.left;x<=refuge.right;x++){
+   const cell=key(x,y);if(s.board[cell])continue;
+   const support=neighbors(x,y).some(([i,j])=>s.board[key(i,j)]?.owner===p.id);
+   const score=toward(x,y)+(support?0:SIZE*2)+8*Math.max(0,4-distance[y*SIZE+x]);
+   if(score<bestScore){best={toX:x,toY:y};bestScore=score;}
+  }
+  if(best){const [x,y]=xy(endangered[0]);return {type:'move-general',x,y,...best};}
+ }
+ const power=siegeBotPower(s,p,army,generals,opponents,distance,now);
+ if(power)return power;
+ const wounded=generals.find(([,u])=>u.hp<=5);
+ if(wounded&&p.money>=8&&!(p.cooldowns?.heal>now)){
+  const [x,y]=xy(wounded[0]);return {type:'heal',x,y,amount:Math.min(p.money-3,12)};
+ }
+ if(!p.pending&&generals.length&&p.money>0&&!(p.cooldowns?.recruit>now)){
+  const reserve=p.money>15?10:0;
+  return {type:'recruit',amount:Math.min(26,p.money-reserve)};
+ }
+ if(!p.pending)return null;
+ if(generals.length&&zone.war){
+  const targets=[...cells.values()].filter(c=>c.unit&&!opponents.get(c.unit.owner)?.shield&&safeSiegeCell(s,c.x,c.y));
+  // A one-hit general is worth taking even if a normal troop is closer to the next zone.
+  targets.sort((a,b)=>(b.unit.hp===1)-(a.unit.hp===1)||Number(!!b.unit.hp)-Number(!!a.unit.hp)||a.unit.hp-b.unit.hp||a.score-b.score);
+  for(const {x,y,unit} of targets)if(unit.hp>1||canRemove(s,unit.owner,key(x,y))||exposedFlank(s,unit.owner,key(x,y)))
+   return {type:'place',x,y,expectedOwner:unit.owner};
+ }
+ if(vacancies.length){const {x,y}=vacancies[0];return {type:'place',x,y,expectedOwner:null};}
+ return null;
+}
 function siegeBotStep(state,now,rng){
- let s=state;
- for(const p of state.players){
-  if(!p.bot||p.eliminated||s.stage!=='playing'||s.siege.inset>=SIZE/2||now<(p.botNext||0))continue;
-  let bot=player(s,p.id);
-  const army=units(s,p.id),hasGeneral=army.some(([,u])=>u.hp);
-  if(hasGeneral&&!bot.pending&&bot.money>0){s=act(s,p.id,{type:'recruit',amount:Math.min(4,bot.money)},{now,rng});bot=player(s,p.id);}
-  if(!bot.pending&&(hasGeneral||bot.money<10))continue;
-  const cells=new Map(),sources=hasGeneral?connected(s,p.id):army.map(([k])=>k);
-  for(const k of sources)for(const [x,y] of neighbors(...xy(k))){
-   const dest=key(x,y),u=s.board[dest];
-   if((!safeSiegeCell(s,x,y)&&!u)||u&&(u.owner===p.id||!s.siege.war||player(s,u.owner).shield))continue;
-   cells.set(dest,{x,y,owner:u?.owner??null,hp:u?.hp||0});
-  }
-  const options=shuffled([...cells.values()],rng);
-  options.sort((a,b)=>Number(!!b.owner)-Number(!!a.owner)||Math.abs(a.x-24)+Math.abs(a.y-24)-Math.abs(b.x-24)-Math.abs(b.y-24));
-  if(!hasGeneral&&bot.money>=10){
-   const home=options.find(c=>!c.owner);
-   if(home){s=act(s,p.id,{type:'general',x:home.x,y:home.y},{now,rng});player(s,p.id).botNext=now+1800;continue;}
-  }
-  const choice=options.filter(c=>!c.owner||hasGeneral).find(c=>!c.owner||c.hp>1||canRemove(s,c.owner,key(c.x,c.y))||exposedFlank(s,c.owner,key(c.x,c.y)));
-  if(choice&&bot.pending)s=act(s,p.id,{type:'place',x:choice.x,y:choice.y,expectedOwner:choice.owner},{now,rng});
-  else if(s===state)s=structuredClone(s);
-  player(s,p.id).botNext=now+1800;
+ let s=siegeTick(state,now,rng);
+ for(const id of state.players.filter(p=>p.bot).map(p=>p.id)){
+  const p=player(s,id);
+  if(p.eliminated||s.stage!=='playing'||s.siege.inset>=SIZE/2||now<(p.botNext||0))continue;
+  let action=siegeBotDecision(s,p,now);
+  if(action){
+   s=act(s,id,action,{now,rng});
+   // Deliver a paid reserve and deploy its first unit in the same decision.
+   if(action.type==='recruit'&&s.stage==='playing'){
+    const deploy=siegeBotDecision(s,player(s,id),now);
+    if(deploy?.type==='place')s=act(s,id,deploy,{now,rng});
+   }
+  }else if(s===state)s=structuredClone(s);
+  player(s,id).botNext=now+(action?1150:2200);
  }
  return s;
 }
@@ -330,6 +452,15 @@ export function migrateSiegeRoom(s){
   if(!z.war)z.warAt=z.start+SIEGE.peaceMs;
   z.nextShrink=(z.war?Date.now():z.warAt)+SIEGE.shrinkMs;
   s.deadline=z.war?z.nextShrink:z.warAt;
+ }
+ if(s.siege&&!s.siege.focus&&s.siege.inset<SIZE/2)s.siege.focus=chooseSiegeFocus(Math.random,s.siege.bounds);
+ if(s.siege&&s.siege.marketVersion!==2){
+  for(const p of s.players){
+   p.cooldowns={};
+   if(p.saleUnlocked)p.money+=100;
+   delete p.saleUnlocked;delete p.saleReady;delete p.soldTroops;
+  }
+  s.siege.marketVersion=2;
  }
  return s;
 }

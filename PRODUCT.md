@@ -1,8 +1,8 @@
 # Kare Oyunu
 
-Mobil ve masaüstü tarayıcılar için 2–6 kişilik sıra tabanlı alan stratejisi. Tek oyunculu giriş bir oda kurar ve iki bot ekler. Arkadaşlar altı haneli kodla aynı odaya katılır. Her oyuncu altı general arasından uygun olanı ve sunulan üç güçten ikisini seçer.
+Mobil ve masaüstü tarayıcılar için 2–6 kişilik alan stratejisi. Klasik mod sıra tabanlıdır. Canlı Kuşatma’da oyuncular aynı anda hamle yapar. Kuşatma kontrolleri ve lazer kuralları KUSATMA.md dosyasındadır. Tek oyunculu giriş bir oda kurar ve iki bot ekler. Arkadaşlar altı haneli kodla aynı odaya katılır. Her oyuncu altı general arasından uygun olanı ve sunulan üç güçten ikisini seçer.
 
-Oyuncu 50 × 50 karede ordusunu büyütür. İlk beş tur barış, altıncı turdan itibaren savaş vardır. Hamle süresi 45 saniyedir. Çark sonucu, kasa, birlikler ve güç kullanımları sunucudan gelir. Maç günlüğü ve yönetici testi bu durumla birlikte çalışır.
+Oyuncu 50 × 50 karede ordusunu büyütür. Klasik modda ilk beş tur barış, altıncı turdan itibaren savaş vardır. Hamle süresi 45 saniyedir. Çark sonucu, kasa, birlikler ve güç kullanımları sunucudan gelir. Maç günlüğü ve yönetici testi bu durumla birlikte çalışır.
 
 Kullanıcının seçtiği dünya “Renkli fantastik arena”. Menüden maça hızlı geçiş, dokunmatik ekranda görünür tahta ve hamle sonucunu ekran üzerinde okumak tasarımın öncelikleridir.
 

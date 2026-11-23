@@ -96,7 +96,11 @@ export const server=http.createServer(async(req,res)=>{try{
    commit(s);sessions.set(token,{id,code:s.code});lastSeen.set(id,now);dirty=true;return reply(res,200,{token,id,serverNow:Date.now(),state:view(s,id)});
   }
   const token=req.headers.authorization?.replace(/^Bearer /,''),session=sessions.get(token);if(!session)return reply(res,401,{error:'Oturum bulunamadı. Lobiye tekrar gir.'});let s=rooms.get(session.code);if(!s)return reply(res,404,{error:'Oda artık yok.'});lastSeen.set(session.id,now);
-  if(url.pathname==='/api/state'&&req.method==='GET')return reply(res,200,{id:session.id,serverNow:Date.now(),state:view(s,session.id)});
+  if(url.pathname==='/api/state'&&req.method==='GET'){
+   if(s.mode==='siege'&&s.stage==='playing'&&url.searchParams.get('since')===String(s.revision))
+    return reply(res,200,{unchanged:true,serverNow:Date.now()});
+   return reply(res,200,{id:session.id,serverNow:Date.now(),state:view(s,session.id)});
+  }
   if(url.pathname==='/api/action'&&req.method==='POST'){
    const a=await body(req);s=tick(rooms.get(session.code),Date.now(),random);
    if(a.type==='bot'){if(s.host!==session.id||s.stage!=='lobby')throw Error('Botu lobide kurucu ekler.');addPlayer(s,randomBytes(8).toString('hex'),['Misket','Fındık','Poyraz','Mercan','Çakıl'][s.players.filter(p=>p.bot).length]||'Bot',true);}

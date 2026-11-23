@@ -4,11 +4,15 @@ import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {icon,powerIcon,moment} from '../public/arena.js';
 import * as rules from '../public/rules.js';
+import {SIEGE_POWERS} from '../public/siege-rules.js';
 import {THEMES,GENERALS,generalById,teamColor} from '../public/cosmetics.js';
 import {FX_DURATION,powerNotice} from '../public/battle-fx.js';
 import {act} from '../engine.mjs';
 const html=await readFile(new URL('../public/index.html',import.meta.url),'utf8');
-const source=(await readFile(new URL('../public/app.js',import.meta.url),'utf8')).replace(/^import .*;\r?\n/gm,'');
+const appModule=await readFile(new URL('../public/app.js',import.meta.url),'utf8');
+const source=appModule.replace(/^import .*;\r?\n/gm,'');
+const ruleNames=appModule.match(/import \{([^}]+)\} from '\.\/rules\.js'/)[1].split(',');
+const importedRules=Object.fromEntries(ruleNames.map(name=>[name.trim(),rules[name.trim()]]));
 // A strict DOM harness: getElementById never accepts CSS selectors, matching browsers.
 function client(){
  const nodes=new Map(),history=[],timers=new Map();let timerId=0,backend;
@@ -20,13 +24,13 @@ function client(){
  for(const m of html.matchAll(/id="([^"]+)"/g))nodes.set(m[1],element(m[1]));
  const selectors={'#target-hint span':element('hint-text'),'#countdown strong':element('count-number'),'.reel-window':element('reel-window'),'.needle':element('needle')};
  const document={getElementById:id=>nodes.get(id)||null,querySelector:q=>selectors[q]||null,querySelectorAll:()=>[],createElement:()=>element('new'),body:element('body')};
- const context={...rules,icon,powerIcon,moment,announce:()=>{},installArena:()=>{},menuMotion:()=>{},setPane:()=>{},THEMES,GENERALS,generalById,teamColor,FX_DURATION,powerNotice,installAdmin:()=>{},document,console,Date,Math,Promise,AbortSignal,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},localStorage:{getItem:()=> 'off',setItem(){},removeItem(){}},location:{reload(){}},navigator:{},
+ const context={...importedRules,SIEGE_POWERS,setupSiege:()=>({sync(){},render(){},feedback(){},blockAttack(){return false;}}),icon,powerIcon,moment,announce:()=>{},installArena:()=>{},menuMotion:()=>{},setPane:()=>{},THEMES,GENERALS,generalById,teamColor,FX_DURATION,powerNotice,installAdmin:()=>{},document,console,Date,Math,Promise,AbortSignal,sessionStorage:{getItem:()=>null,setItem(){},removeItem(){}},localStorage:{getItem:()=> 'off',setItem(){},removeItem(){}},location:{reload(){}},navigator:{},
   Board:class{reduced=false;setState(){}effect(){}focus(){}fit(){}zoomBy(){}},
   setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>0,clearInterval(){},
   fetch:async(url,options)=>{try{backend=act(backend,'a',JSON.parse(options.body));return {ok:true,json:async()=>({id:'a',state:backend})};}catch(e){return {ok:false,status:400,json:async()=>({error:e.message})};}}
  };
  vm.runInNewContext(source+'\nglobalThis.testClient={update,activate,cell,inventory,get busy(){return animating},get queue(){return reelQueue},get target(){return target}};',context);
- return {nodes,selectors,history,api:context.testClient,
+ return {nodes,selectors,history,api:context.testClient,get backend(){return backend;},
   set(s){backend=s;context.testClient.update({id:'a',state:s});},
   async flush(){for(let i=0;i<30;i++){await Promise.resolve();await Promise.resolve();for(const [id,t]of [...timers]){timers.delete(id);t.fn();}}await context.testClient.queue;}};
 }
@@ -50,3 +54,19 @@ test('manual loss invalid cell leaves loss controls available instead of freezin
 });
 
 test('bet sliders, presets, formula and saved bet respect current resources',async()=>{const c=client(),s=state();c.set(s);c.nodes.get('preset-4').onclick();assert.equal(c.nodes.get('bet-troops').value,2);assert.equal(c.nodes.get('bet-money').value,10);assert.match(c.nodes.get('bet-formula').textContent,/24 asker/);c.nodes.get('bet-section').onkeydown({target:{id:'troop-slider'},key:'ArrowLeft',shiftKey:false,preventDefault(){}});assert.equal(c.nodes.get('bet-troops').value,1);s.lock='b';c.set(s);c.nodes.get('preset-4').onclick();assert.equal(c.nodes.get('bet-money').value,0);assert.match(c.nodes.get('bet-badges').textContent,/Kasa kilitli/);});
+
+function siegeState(){
+ const s=state(),now=Date.now();s.mode='siege';s.siege={marketVersion:2,war:false,inset:0,focus:{x:4,y:43},nextIncome:now+25000,warAt:now+120000,nextShrink:now+165000};
+ return s;
+}
+test('siege taps sell instantly, carry a general through invalid targets and drop without buying',async()=>{
+ const c=client(),s=siegeState();c.set(s);
+ await c.api.cell(11,10);assert.equal(c.backend.players[0].money,11);assert.equal(c.backend.board['11,10'],undefined);assert.equal(c.nodes.get('modal').open,false);
+ await c.api.cell(10,10);assert.equal(c.api.target.type,'move-general');assert.match(c.selectors['#target-hint span'].textContent,/boş bir kare/);
+ await c.api.cell(30,30);assert.equal(c.api.target.type,'move-general');assert.equal(c.backend.board['10,10'].hp,10);
+ await c.api.cell(42,44);assert.equal(c.api.target,null);assert.equal(c.backend.board['10,10'],undefined);assert.equal(c.backend.board['42,44'].hp,10);assert.equal(c.backend.players[0].money,11);
+});
+test('a siege card can be used while its repurchase timer runs',async()=>{
+ const c=client(),s=siegeState();s.players[0].cooldowns={14:Date.now()+30000};c.set(s);
+ await c.api.activate(14);assert.equal(c.backend.players[0].shield,true);assert.equal(c.backend.players[0].inventory[14],2);
+});

@@ -17,7 +17,7 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
  $('mode-siege').onclick=()=>mode(true);$('mode-classic').onclick=()=>mode(false);
  function sync(now){if(Number.isFinite(now))offset=now-Date.now();}
  function rules(){
-  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından iki dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Lazer 45 saniyede bir farklı bir odağa doğru daralır. İki daralma dışarıda kalan asker ölür. Generalin orduya bağlantı hattı korunur. General ilk zehir isabetinde 5 can kaybeder; sonraki isabetler 10, 20, 40 diye büyür.</li></ol>');
+  modal('Kuşatma kılavuzu','<ol class="rules-list"><li>Herkes karargâhını aynı anda seçer. İlk seçim yerini alır. Çakışan ordu en yakın uygun alana yerleşir.</li><li>Herkes hazır olunca 10 saniyelik geri sayım başlar. Ardından iki dakika boyunca asker satın alabilir, yerleşebilir ve generallerini iyileştirebilirsin.</li><li>25 saniyede 20 $ gelir. Asker üretimi yoktur. Bir asker veya bir can 1 $ tutar.</li><li>Savaşta saldırmak için sahada generalin olmalı. General kaybedersen marketten yenisini çağır.</li><li>Altın bayrak bu maçın lazer hedefini gösterir. Alan bayrağa doğru 45 saniyede bir daralır. Kırmızı alana asker koyabilirsin. Daralma anında dışarıdaki askerler düşer. Dışarıda kalan general sırasıyla 5, 10, 20, 40 can kaybeder.</li><li>Askerine dokununca kasana 1 $ döner. Generaline dokun, sonra haritada boş bir kare seçerek onu taşı.</li><li>Her market ürünü satın alındıktan 30 saniye sonra tekrar alınabilir. Elindeki kartları uygun oyun evresinde hemen kullanabilirsin.</li></ol>');
  }
  let lastSecond=-1,stage='',notice='';
  function alarm(title,detail){
@@ -40,10 +40,12 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
   }
   if(s.stage==='placement'){$('hud').textContent=s.players.filter(q=>q.ready).length+' / '+s.players.length+' hazır';return;}
   const zone=s.siege;if(!zone)return;
+  if(view==='market'&&$('modal').open)prices();
   const bar=$('siege-income'),remain=seconds(zone.nextIncome);bar.max=SIEGE.incomeMs/1000;bar.value=Math.max(0,bar.max-remain);
   $('siege-income-text').textContent='+20 $ · '+remain+' sn';
   const next=zone.war?zone.nextShrink:zone.warAt;
-  $('hud').innerHTML='<div><strong>'+(zone.inset>=25?'Son zehir':zone.war?'Lazer sınırı':'Hazırlık')+'</strong></div><div><strong>'+time(seconds(next))+'</strong></div>';
+  const focus=zone.focus&&zone.inset<25?'<div title="Lazerin daralacağı kare"><strong>⚑ '+(zone.focus.x+1)+', '+(zone.focus.y+1)+'</strong></div>':'';
+  $('hud').innerHTML='<div><strong>'+(zone.inset>=25?'Son zehir':zone.war?'Lazer sınırı':'Hazırlık')+'</strong></div><div><strong>'+time(seconds(next))+'</strong></div>'+focus;
  }
  function summary(){
   const {s}=read();return '<ul class="siege-report">'+s.players.map(q=>'<li>'+esc(q.name)+' · '+units(s,q.id).length+' kare · '+q.money+' $</li>').join('')+'</ul>';
@@ -79,28 +81,27 @@ export function setupSiege({read,command,modal,setTarget,activate,powerBlocked,e
    $('siege-hand').innerHTML=hand.map(c=>'<button class="siege-hand-card" data-card="'+c.id+'" aria-label="'+esc(c.name)+', '+(p.inventory[c.id]<0?'sınırsız':p.inventory[c.id])+' kullanım">'+pic('card-'+c.id)+'<span>'+esc(c.name)+'</span><b>'+(p.inventory[c.id]<0?'∞':p.inventory[c.id])+'</b></button>').join('')||'<small class="siege-empty">Kart almak için markete dokun.</small>';
   }
   if(view.startsWith('card:')&&$('siege-use')){const card=SIEGE_POWERS.find(c=>c.id===Number(view.slice(5))),reason=powerBlocked(card);$('siege-use').disabled=!!reason;$('siege-use-note').textContent=reason||'';}
-  if(view==='market'&&$('modal').open)prices();
   clock();
  }
  function prices(){
   const {s,p,id}=read(),count=units(s,id).filter(([,u])=>u.hp).length;
   for(const b of $('modal-body').querySelectorAll('[data-price]')){
-   const price=b.id==='siege-buy-general'?(count+1)*10:Number(b.dataset.price);
-   b.disabled=p.eliminated||s.siege.inset>=25||p.money<price||(b.id==='siege-heal'&&count===0);
-   if(b.dataset.buy){const seconds=Math.ceil(((p.cooldowns?.[b.dataset.buy]||0)-Date.now()-offset)/1000);if(seconds>0)b.disabled=true;b.textContent=seconds>0?seconds+' sn':price+' $ · Satın al';}
-   if(b.id==='siege-sale'&&p.saleUnlocked)b.disabled=true;
-   if(b.id==='siege-buy-general')b.querySelector('small').textContent=price+' $ · '+price+' can';
+   const product=b.dataset.buy||b.dataset.product;
+   const price=product==='general'?(count+1)*10:Number(b.dataset.price);
+   const seconds=Math.max(0,Math.ceil(((p.cooldowns?.[product]||0)-Date.now()-offset)/1000));
+   b.disabled=seconds>0||p.eliminated||s.siege.inset>=25||p.money<price||(product==='heal'&&count===0);
+   const label=b.dataset.buy?b:b.querySelector('small');
+   const detail=product==='general'?price+' $ · '+price+' can':b.dataset.buy?price+' $ · Satın al':b.dataset.label;
+   const text=seconds?'Tekrar al · '+seconds+' sn':detail;
+   if(label.textContent!==text)label.textContent=text;
   }
   const cash=$('siege-wallet');if(cash)cash.textContent=p.money+' $';
  }
  function shop(){
   const {s,p}=read();if(p.eliminated||s.stage!=='playing')return;
-  const item=(id,img,name,label,price)=>'<button id="'+id+'" data-price="'+price+'">'+pic(img)+'<span>'+name+'<small>'+label+'</small></span></button>';
-  modal('Saha marketi','<p class="siege-wallet">'+pic('cash')+' Kasa <b id="siege-wallet"></b></p><div class="siege-market-grid">'+item('siege-move','soldier','Asker düzenle','Sahadaki askeri taşı',0)+item('siege-sale','cash',p.saleUnlocked?'Terhis yetkisi açık':'Terhis yetkisi','1 asker ↔ 1 $ · Yetki 100 dolar',p.saleUnlocked?0:100)+(p.soldTroops?item('siege-recall','soldier','Geri çağır',p.soldTroops+' terhisli · 1 $ / asker',1):'')+item('siege-buy-general','general','General çağır','',10)+item('siege-heal','general','General iyileştir','1 $ / can',1)+item('siege-recruit','soldier','Asker al','1 $ / asker',1)+'</div><h3>Güç kartları</h3><div class="siege-catalog">'+SIEGE_POWERS.map(c=>'<article>'+pic('card-'+c.id)+'<div><h3>'+esc(c.name)+'</h3><p>'+esc(c.desc)+'</p><button data-buy="'+c.id+'" data-price="'+c.price+'">'+c.price+' $ · Satın al</button></div></article>').join('')+'</div>');
+  const item=(id,product,img,name,label,price)=>'<button id="'+id+'" data-product="'+product+'" data-label="'+label+'" data-price="'+price+'">'+pic(img)+'<span>'+name+'<small>'+label+'</small></span></button>';
+  modal('Saha marketi','<p class="siege-wallet">'+pic('cash')+' Kasa <b id="siege-wallet"></b></p><div class="siege-market-grid">'+item('siege-recruit','recruit','soldier','Asker al','1 $ / asker',1)+item('siege-buy-general','general','general','General çağır','',10)+item('siege-heal','heal','general','General iyileştir','1 $ / can',1)+'</div><h3>Güç kartları</h3><div class="siege-catalog">'+SIEGE_POWERS.map(c=>'<article>'+pic('card-'+c.id)+'<div><h3>'+esc(c.name)+'</h3><p>'+esc(c.desc)+'</p><button data-buy="'+c.id+'" data-price="'+c.price+'">'+c.price+' $ · Satın al</button></div></article>').join('')+'</div>');
   view='market';prices();
-  $('siege-move').onclick=()=>setTarget({type:'move-source'},'Taşımak istediğin kendi normal askerini seç.');
-  $('siege-sale').onclick=async()=>{if(await command({type:'unlock-sale'})){shop();toast('Terhis yetkisi 40 saniye sonra hazır.');}};
-  if($('siege-recall'))$('siege-recall').onclick=()=>setTarget({type:'restore-troop'},'1 dolar karşılığı geri çağırmak için boş ve bağlı kareyi seç.');
   $('siege-buy-general').onclick=()=>setTarget({type:'general'},'General için orduna bağlı boş kareyi seç.');
   $('siege-recruit').onclick=()=>quantity(false);$('siege-heal').onclick=()=>quantity(true);
   for(const b of $('modal-body').querySelectorAll('[data-buy]'))b.onclick=async()=>{b.disabled=true;if(await command({type:'buy',power:Number(b.dataset.buy)}))toast('Kart satın alındı.');prices();};
